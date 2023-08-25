@@ -3,7 +3,7 @@ import numpy as np
 import os
 
 RTMP_URL="rtmp://a.rtmp.youtube.com/live2/"
-YTSTREAM = RTMP_URL + os.environ.get("SINAR_YT_KEY")
+YTSTREAM = RTMP_URL + os.environ.get("SINAR_YT_KEY", '')
 
 class RTMPStream:
     def __init__(self, w, h, fr):
@@ -30,7 +30,9 @@ class RTMPStream:
         self.proc = None
     def start(self, output):
         self.cmd.append(output)
-        self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE)
+        self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, 
+                                     stdout=subprocess.DEVNULL, 
+                                     stderr=subprocess.DEVNULL)
         return self
     def write(self, frame: np.ndarray):
         if self.proc is None:

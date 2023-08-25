@@ -1,6 +1,7 @@
 from ultralytics import YOLO
 from multiprocessing import Process, Event
 import time
+from supervision.video.dataclasses import VideoInfo
 
 from stream import RTMPStream, YTSTREAM
 from predigenk import Anbev
@@ -11,7 +12,9 @@ MAXSHAPE = 30
 SAMPLING = 5
 STEP = 1
 
-logger = logger.get(__name__)
+logger = logger.get(__name__, level="DEBUG")
+
+sinar_processes = []
 
 class SINAR:
     def __init__(self, yolo_model, abModel, *, device="cpu"):
@@ -74,3 +77,33 @@ class SINAR:
             p.process.join()
             logger.info(f"{p.name} stopped")
         logger.info("all process stopped")
+
+def _inner_main(yolo_model, abModel, source, output, device="cpu", stop_event=None):
+        sinar = SINAR(yolo_model, abModel, device=device)
+        vi = VideoInfo.from_video_path(source)
+        streamer = RTMPStream(vi.width, vi.height, vi.fps).start(output)
+        try:
+            sinar(source, streamto=streamer, stop_event=stop_event)
+        except Exception as e:
+            logger.error(f"error in process: {e}")
+        except KeyboardInterrupt:
+            pass
+        finally:
+            sinar.ab_predictor.stop()
+            streamer.stop()
+
+def new_sinar_process(yolo_model, abModel, source, output ,*, process_name=None, device="cpu"):
+    stop_event = Event()
+    process = Process(target=_inner_main, name=process_name,
+                      args=(yolo_model, abModel, source, output, device, stop_event))
+    process.start()
+    sinar_processes.append(Process_wrapper(process, process_name, stop_event))
+    return process
+
+def stop_all_processes():
+    for p in sinar_processes:
+        p.stop_event.set()
+        p.process.join()
+        # p.process.terminate()
+        logger.info(f"{p.name} stopped")
+    logger.info("all process stopped")
