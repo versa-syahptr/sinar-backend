@@ -1,8 +1,10 @@
 from ultralytics import YOLO
+from multiprocessing import Process, Event
+import time
 
 from stream import RTMPStream, YTSTREAM
 from predigenk import Anbev
-from utils import cvtext
+from utils import cvtext, Process_wrapper, check_stream
 import logger
 
 MAXSHAPE = 30
@@ -16,38 +18,32 @@ class SINAR:
         self.yolo_model = YOLO(yolo_model)
         self.yolo_model.fuse()
         self.device = device
-        print(f"yolo model loaded [{yolo_model}]")
+        logger.info(f"yolo model loaded [{yolo_model}]")
         self.ab_predictor = Anbev(abModel)
+        
+        # processes
+        self._process = []
     
-    def __call__(self, source, streamto: RTMPStream = None, frame_preprocessor=None):
-        result_generator = self.yolo_model.track(source, device=self.device, stream=True)
+    def __call__(self, source,*, 
+                 streamto: RTMPStream = None, 
+                 frame_preprocessor=None, 
+                 stop_event: Event = None):
+        # check stream availability
+        while not check_stream(source):
+            logger.info(f"stream {source} is offline, retrying...")
+            time.sleep(5)
+
+        result_generator = self.yolo_model.track(source, device=self.device, stream=True, verbose=False)
         # start thread if it isn't started
         if not self.ab_predictor.is_alive():
             self.ab_predictor.start()
-        print(f"tracker start ({source})")
+        logger.info(f"tracker start ({source})")
         for result in result_generator:
             frame = result.plot()
-            # ANALYSIS BEHAVIOR START
-            # logger.debug(result.verbose())
-            if result.boxes.id is not None: # ada deteksi
-                self.ab_predictor.result_queue.put(result)
-                # if (idx_frame == STEP or idx_frame == next_frame_idx) and len(centroids) < MAXSHAPE:
-                #     ids, xy = get_xyid(result.boxes)
-                #     centroids.append(to_dict(ids, xy, flatten=True))
-                #     next_frame_idx = idx_frame + SAMPLING
-                #     print(f"{idx_frame} ✔\r")
-                # idx_frame += 1
-                # if len(centroids) >= MAXSHAPE: # full
-                #     df = make_dataframe(centroids)
-                #     idx_frame = STEP
-                #     next_frame_idx = idx_frame + SAMPLING
-                #     # PREDICT
-                #     x = fill_square(df.values, MAXSHAPE)
-                #     print("anbev predicting ")
-                #     preds = self.ab_predict(x)
-                #     print("preds result:", "GENG MOTOR" if preds else "aman 👌")
-                #     flag = bool(preds)
-            # ANALYSIS BEHAVIOR END
+            logger.debug(result.verbose())
+            # send result to analysis behavior predictor
+            self.ab_predictor.result_queue.put(result)
+
             if frame_preprocessor is not None:
                 frame = frame_preprocessor(frame)
             # geng motor terdeteksi
@@ -56,3 +52,25 @@ class SINAR:
             # write to stream
             if streamto is not None:
                 streamto.write(frame)
+            # stop event
+            if stop_event is not None and stop_event.is_set():
+                break
+        logger.info("tracker stop")
+        # stop analysis behavior predictor
+        self.ab_predictor.stop()
+        streamto.stop()
+        logger.info("stream stopped")
+    
+    def start_threaded(self, name, source, streamto: RTMPStream = None, frame_preprocessor=None):
+        stop_event = Event()
+        p = Process(target=self, args=(source, streamto, frame_preprocessor, stop_event), name=name)
+        p.start()
+        self._process.append(Process_wrapper(p, name, stop_event))
+        return p
+    
+    def stop_all(self):
+        for p in self._process:
+            p.stop_event.set()
+            p.process.join()
+            logger.info(f"{p.name} stopped")
+        logger.info("all process stopped")

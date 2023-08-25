@@ -2,6 +2,10 @@ import numpy as np
 import pandas as pd
 import cv2
 
+from collections import namedtuple
+
+Process_wrapper = namedtuple("Process_wrapper", "process, name, stop_event")
+
 def get_xyid(boxes, norm=True):
     if norm:
         xy = boxes.xywhn.cpu().numpy()[:,:2]
@@ -39,3 +43,10 @@ def cvtext(frame, text):
     text_position = (320, 240)  # (x, y) position of the text
     cv2.putText(frame, text, text_position, font, font_scale, text_color, text_thickness)
     return frame
+
+def check_stream(stream):
+    cap = cv2.VideoCapture(stream)
+    if not cap.isOpened():
+        return False
+    cap.release()
+    return True

@@ -1,9 +1,9 @@
 import subprocess
 import numpy as np
+import os
 
 RTMP_URL="rtmp://a.rtmp.youtube.com/live2/"
-STREAM_KEY="cyuj-ctp9-vgup-8mw3-5yxr"
-YTSTREAM = RTMP_URL + STREAM_KEY
+YTSTREAM = RTMP_URL + os.environ.get("SINAR_YT_KEY")
 
 class RTMPStream:
     def __init__(self, w, h, fr):
@@ -31,6 +31,7 @@ class RTMPStream:
     def start(self, output):
         self.cmd.append(output)
         self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE)
+        return self
     def write(self, frame: np.ndarray):
         if self.proc is None:
             raise Exception("Stream not started")
