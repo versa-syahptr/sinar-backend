@@ -4,3 +4,4 @@ __*
 *.pt
 *.keras
 .idea
+runs/*
