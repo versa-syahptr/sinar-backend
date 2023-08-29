@@ -5,14 +5,14 @@ import ultralytics
 # from sinar import SINAR
 import sinar
 from stream import RTMPStream, YTSTREAM
-# import multiprocessing as mp
+import multiprocessing as mp
 import logger
 import os
 
 logger = logger.get(__name__)
 
 if __name__ == "__main__":
-    # mp.set_start_method("spawn")
+    mp.set_start_method("spawn")
     parser = argparse.ArgumentParser()
     parser.add_argument("-y", "--yolo", type=str, required=True, help="path to yolo model")
     parser.add_argument("-a", "--ab", type=str, required=True, help="path to analysis behavior model")

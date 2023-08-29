@@ -1,5 +1,6 @@
 from ultralytics import YOLO
-from threading import Thread, Event
+# from threading import Thread, Event
+from multiprocessing import Process, Event
 import time
 from supervision.video.dataclasses import VideoInfo
 
@@ -13,7 +14,7 @@ MAXSHAPE = 30
 SAMPLING = 5
 STEP = 1
 
-logger = logger.get(__name__, level="DEBUG")
+logger = logger.get(__name__)
 
 sinar_processes = []
 
@@ -25,7 +26,7 @@ class SINAR:
         
         # self.device = device
         logger.info(f"yolo model loaded [{yolo_model}]")
-        self.ab_predictor = Anbev(abModel, threaded=False)
+        self.ab_predictor = Anbev(abModel, threaded=True)
         
         # processes
         self._process = []
@@ -34,10 +35,12 @@ class SINAR:
                  streamto: RTMPStream = None, 
                  frame_preprocessor=None, 
                  stop_event: Event = None):
+
         # check stream availability
-        # while not check_stream(source):
-        #     logger.info(f"stream {source} is offline, retrying...")
-        #     time.sleep(5)
+        retry_count = 0
+        while not check_stream(source):
+            logger.info(f"stream {source} is offline, retrying...")
+            time.sleep(5)
 
         #open source stream
         # cap = cv2.VideoCapture(source)
@@ -102,24 +105,25 @@ class SINAR:
             logger.info(f"{p.name} stopped")
         logger.info("all process stopped")
 
-def _inner_main(sinar, source, output, stop_event=None):
-        vi = VideoInfo.from_video_path(source)
-        streamer = RTMPStream(vi.width, vi.height, vi.fps).start(output)
-        try:
-            sinar(source, streamto=streamer, stop_event=stop_event)
-        except Exception as e:
-            logger.exception(f"error in process: {e}")
-        except KeyboardInterrupt:
-            pass
-        finally:
-            # sinar.ab_predictor.stop()
-            streamer.stop()
+def _inner_main(yolo, anbev, source, output, stop_event=None):
+    sinar = SINAR(yolo, anbev)
+    vi = VideoInfo.from_video_path(source)
+    streamer = RTMPStream(vi.width, vi.height, vi.fps).start(output)
+    try:
+        sinar(source, streamto=streamer, stop_event=stop_event)
+    except Exception as e:
+        logger.exception(f"error in process: {e}")
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # sinar.ab_predictor.stop()
+        streamer.stop()
 
 def new_sinar_process(yolo_model, abModel, source, output ,*, process_name=None):
-    sinar = SINAR(yolo_model, abModel)
+    # sinar = SINAR(yolo_model, abModel)
     stop_event = Event()
-    process = Thread(target=_inner_main, name=process_name,
-                      args=(sinar, source, output, stop_event))
+    process = Process(target=_inner_main, name=process_name,
+                      args=(yolo_model, abModel, source, output, stop_event))
     process.start()
     sinar_processes.append(Process_wrapper(process, process_name, stop_event))
     return process

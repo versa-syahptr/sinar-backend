@@ -9,6 +9,7 @@ class RTMPStream:
     def __init__(self, w, h, fr):
         self.cmd = [
             'ffmpeg',
+            '-re',
             '-y',  # Overwrite output file if it already exists
             '-f', 'rawvideo',
             '-pix_fmt', 'bgr24',
@@ -18,10 +19,10 @@ class RTMPStream:
             '-f', 'lavfi',
             '-i', 'anullsrc', # null audio
             '-c:v', 'libx264',
-            '-preset', 'veryfast',
-            '-maxrate', '3m',
+            '-preset', 'ultrafast',
+            '-maxrate', '8m',
             '-bufsize', '10m',
-            # '-crf', '23',
+            '-crf', '18',
             '-pix_fmt', 'yuv420p',
             '-g', '50',
             '-f', 'flv',

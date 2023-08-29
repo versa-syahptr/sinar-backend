@@ -13,8 +13,9 @@ logger = logger.get(__name__, level="DEBUG")
 class Anbev():
     def __init__(self, model, threaded=False,**kwargs) -> None:
         super(Anbev, self).__init__()
-        self.name = "Analysis Behavior"
-        self.model = tf.keras.models.load_model(model)
+        self.name = "Anbev-"+kwargs.get("name", "")
+        with tf.device("CPU"):
+            self.model = tf.keras.models.load_model(model)
         logger.info(f"Analysis Behavior model loaded [{model}]")
 
         self.size = kwargs.get("size", 30)
@@ -27,7 +28,7 @@ class Anbev():
         self.stop_event = Event()
         self.genk_event = Event()
         # queues
-        self.result_queue = Queue()
+        # self.result_queue = Queue()
         if threaded:
             self.thread = Thread(target=self.run, name=self.name)
         else:
@@ -47,7 +48,7 @@ class Anbev():
         # PREDICT
         x = fill_square(df.values, self.size)
         logger.info("Analysis Behavior predicting ")
-        with tf.device("cpu"):
+        with tf.device("CPU"):
             pred = self.model(np.array([x])).numpy().round().astype(int)[0,0]
         logger.info(f"preds result: {'GENG MOTOR' if pred else 'aman 👌'}")
         return pred

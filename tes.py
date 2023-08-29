@@ -12,27 +12,30 @@ def run_tracker_in_thread(filename, model):
     fps = int(video.get(cv2.CAP_PROP_FPS))
     streamer = RTMPStream(w, h, fps)
     streamer.start(f'rtmp://localhost:1935/output/{os.path.basename(filename).split(".")[0]}')
-    while video.isOpened():
-        ret, frame = video.read()
-        if ret:
-            results = model.track(source=frame, persist=True)
-            res_plotted = results[0].plot()
-            streamer.write(res_plotted)
+    video.release()
+    results_generator = model.track(filename, stream=True)
+    for result in results_generator:
+    # while video.isOpened():
+        # ret, frame = video.read()
+        # if ret:
+            # results = model.track(source=frame, persist=True)
+        res_plotted = result.plot()
+        streamer.write(res_plotted)
             # cv2.imshow('p', res_plotted)
             # if cv2.waitKey(1) == ord('q'):
                 # break
-        else:
-            break
+        # else:
+        #     break
     streamer.stop()
 
 
 # Load the models
-# model1 = YOLO('best.pt')
+# model = YOLO('best.pt')
 # model2 = YOLO('best.pt')
 
 # Define the video files for the trackers
 srcs = ['https://pelindung.bandung.go.id:3443/video/HIKSVISION/Ant.m3u8',
-               'https://pelindung.bandung.go.id:3443/video/HUAWEI/soetabubat.m3u8']
+        'https://pelindung.bandung.go.id:3443/video/HUAWEI/soetabubat.m3u8']
 threads = []
 for src in srcs:
     model = YOLO('best.pt')
