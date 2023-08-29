@@ -9,6 +9,8 @@ from fastapi.encoders import jsonable_encoder
 from base_response import ApiResponse
 from model.cctv import CCTVModel
 
+import sinar
+
 app = FastAPI()
 client = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://public:20031015@test-crud.utmjs38.mongodb.net/")
 db = client.sinar
@@ -78,8 +80,20 @@ async def update_cctv(cctv_id:str, body=Body(...)):
 async def start_tracker_cctv(cctv_id: str):
     if len(cctv_id) > 0:
         # Panggil tracker
-        if True:
+        ret = sinar.new_sinar_process("best.pt", "anbev-cnn-fix.keras", 
+            f"rtmp://localhost/input/{cctv_id}", f"rtmp://localhost/output/{cctv_id}", 
+            process_name=f"{cctv_id}")
+        if ret:
             return ApiResponse.success(True)
         else:
             return ApiResponse.failed(f"Gagal menjalankan tracker {cctv_id}")
 
+@app.get("/stop-tracker/{cctv_id}")
+async def stop_tracker_cctv(cctv_id: str):
+    if len(cctv_id) > 0:
+        # Panggil tracker
+        ret = sinar.stop_process(cctv_id)
+        if ret:
+            return ApiResponse.success(True)
+        else:
+            return ApiResponse.failed(f"Gagal menghentikan tracker {cctv_id}")

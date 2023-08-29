@@ -1,0 +1,13 @@
+[Unit]
+Description=SINAR service rest api
+After=network.target
+
+[Service]
+User=versa
+Group=sinar
+WorkingDirectory=/home/versa1220/sinar-backend
+#Environment="PATH=/home/sammy/myproject/myprojectenv/bin"
+ExecStart=/opt/conda/bin/python /home/versa1220/sinar-backend/server.py 
+
+[Install]
+WantedBy=multi-user.target

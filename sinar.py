@@ -126,7 +126,17 @@ def new_sinar_process(yolo_model, abModel, source, output ,*, process_name=None)
                       args=(yolo_model, abModel, source, output, stop_event))
     process.start()
     sinar_processes.append(Process_wrapper(process, process_name, stop_event))
-    return process
+
+    return process.is_alive()
+
+def stop_process(process_name):
+    for p in sinar_processes:
+        if p.name == process_name:
+            p.stop_event.set()
+            p.process.join()
+            logger.info(f"{p.name} stopped")
+            return True
+    return False
 
 def stop_all_processes():
     for p in sinar_processes:
@@ -135,3 +145,4 @@ def stop_all_processes():
         # p.process.terminate()
         logger.info(f"{p.name} stopped")
     logger.info("all process stopped")
+
