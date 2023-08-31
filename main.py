@@ -1,15 +1,11 @@
 import argparse
-from supervision.video.dataclasses import VideoInfo
 import time
 import ultralytics
-# from sinar import SINAR
 import sinar
-from stream import RTMPStream, YTSTREAM
 import multiprocessing as mp
-import logger
 import os
+from sinar.logger import logger
 
-logger = logger.get(__name__)
 
 if __name__ == "__main__":
     mp.set_start_method("spawn")
@@ -27,40 +23,21 @@ if __name__ == "__main__":
 
     ultralytics.checks()
 
-    # sinar = SINAR(args.yolo, args.ab)
-
     try:
-        # single source
-        # logger.info(f"processing {args.source} -> {args.output}")
-        # vi = VideoInfo.from_video_path(args.source)
-        # streamer = RTMPStream(vi.width, vi.height, vi.fps).start(args.output)
-        # sinar(args.source, streamto=streamer)
         for source, output in zip(args.source, args.output):
             logger.info(f"processing {source} -> {output}")
-            # vi = VideoInfo.from_video_path(source)
-            # streamer = RTMPStream(vi.width, vi.height, vi.fps).start(output)
-            # sinar.start_threaded(os.path.basename(source), source, streamto=streamer)
             sinar.new_sinar_process(args.yolo, args.ab, source, output, 
                                     process_name=os.path.basename(source))
+            
         logger.info("all process started, main process idling")
-        while True:
-            time.sleep(10)
-        # for p in sinar._process:
-        #     p.process.join()
-            # logger.info(f"{p.name} stopped")
+        while sinar.any_process_alive():
+            time.sleep(1)
 
     except Exception:
         logger.exception("error in main process")
-        # sinar.stop_all()
-        # sinar.stop_all_processes() 
-        # sinar.ab_predictor.stop()
-        # streamer.stop()
     except KeyboardInterrupt:
         pass
     finally:
-        # sinar.stop_all()
         sinar.stop_all_processes() 
-        # sinar.ab_predictor.stop()
-        # streamer.stop()
         logger.info("main process stopped")
 

@@ -4,7 +4,7 @@ import cv2
 
 from collections import namedtuple
 
-Process_wrapper = namedtuple("Process_wrapper", "process, name, stop_event")
+Process_wrapper = namedtuple("Process_wrapper", "process, stop_event")
 
 def get_xyid(boxes, norm=True):
     if norm:
