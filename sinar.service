@@ -7,6 +7,9 @@ User=versa
 Group=sinar
 WorkingDirectory=/home/versa1220/sinar-backend
 ExecStart=/opt/conda/bin/python /home/versa1220/sinar-backend/server.py 
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=sinar
 
 [Install]
 WantedBy=multi-user.target

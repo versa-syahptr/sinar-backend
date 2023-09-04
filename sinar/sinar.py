@@ -1,12 +1,12 @@
 from ultralytics import YOLO
 from multiprocessing import Event
 import time
-from supervision.video.dataclasses import VideoInfo
 
-from .stream import RTMPStream, YTSTREAM
+from .stream import RTMPStream
 from .predigenk import Anbev
-from .utils import cvtext, Process_wrapper, check_stream
+from .utils import cvtext, check_stream
 from .logger import logger
+from notification_service import send_alert_notification
 import cv2
 
 MAXSHAPE = 30
@@ -40,7 +40,8 @@ class SINAR:
         cam_id = source.split("/")[-1]
         result_generator = self.yolo_model.track(source, device=0, stream=True, verbose=False)
         logger.info(f"tracker start ({source})")
-
+        pred = False
+        img_index = 0
         for result in result_generator:
             frame = result.plot()
             logger.debug(f"{result.verbose()}; speed: {sum(result.speed.values()):.2f}ms")
@@ -51,8 +52,15 @@ class SINAR:
             # predict
             if self.ab_predictor.ready():
                 pred = self.ab_predictor.predict()
-                if pred:
-                    frame = cvtext(frame, "ADA GENG MOTOR")
+                if pred: # do only once
+                    cv2.imwrite(f"/var/www/image/{img_index}-{cam_id}.jpg", frame)
+                    img_index += 1
+                    send_alert_notification("ADA GENG MOTOR", "Ada geng motor di depan", cam_id, 
+                                            f"http://sinar.versa.my.id/image/{img_index}-{cam_id}.jpg")
+                    
+            # do as long as pred is true
+            if pred:
+                frame = cvtext(frame, "ADA GENG MOTOR")
 
             if frame_preprocessor is not None:
                 frame = frame_preprocessor(frame)

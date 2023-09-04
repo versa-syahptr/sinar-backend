@@ -4,6 +4,7 @@ from typing import List
 import motor.motor_asyncio
 from bson import json_util, ObjectId
 from fastapi import FastAPI, Body, Path
+from fastapi.responses import FileResponse
 from fastapi.encoders import jsonable_encoder
 
 from base_response import ApiResponse
@@ -14,6 +15,11 @@ import sinar
 app = FastAPI()
 client = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://public:20031015@test-crud.utmjs38.mongodb.net/")
 db = client.sinar
+
+
+@app.get("/")
+async def root():
+    return FileResponse("/var/www/html/index.nginx-debian.html")
 
 
 @app.get("/ping")
