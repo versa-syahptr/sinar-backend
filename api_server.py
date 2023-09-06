@@ -6,6 +6,8 @@ from bson import json_util, ObjectId
 from fastapi import FastAPI, Body, Path
 from fastapi.responses import FileResponse
 from fastapi.encoders import jsonable_encoder
+from geopy import GoogleV3
+
 
 from base_response import ApiResponse
 from model.cctv import CCTVModel
@@ -16,6 +18,7 @@ app = FastAPI()
 client = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://public:20031015@test-crud.utmjs38.mongodb.net/")
 db = client.sinar
 
+geolocator = GoogleV3(api_key="") # apikey geolocation api
 
 @app.get("/")
 async def root():
@@ -24,7 +27,11 @@ async def root():
 
 @app.get("/ping")
 async def ping():
-    return ApiResponse.success("pong")
+    # geolocator = Nominatim(user_agent="com.pkmkc.backend")
+    location = geolocator.reverse("-6.967863, 107.634587")
+    # location = geolocator.reverse("-18.252100, 96.706631")
+    print(location.address)
+    return ApiResponse.success(str(location), message="pong")
 
 
 @app.get("/list-cctv")
@@ -55,6 +62,8 @@ async def insert_cctv(body=Body(...)):
     if "lat" not in cctv.keys() or "lng" not in cctv.keys():
         return ApiResponse.failed("Lat, Lng is Null")
     cctv["status"] = "SAFE"
+    location = geolocator.reverse(f"{cctv['lat']}, {cctv['lng']}")
+    cctv["address"] = str(location)
     new_cctv = await db["cctv"].insert_one(cctv)
     created_cctv = await db["cctv"].find_one({"_id": ObjectId(new_cctv.inserted_id)})
     created_cctv: CCTVModel = json.loads(json_util.dumps(created_cctv))
@@ -69,7 +78,13 @@ async def update_cctv(cctv_id:str, body=Body(...)):
         return ApiResponse.failed("Body length is Null")
     get_cctv = {k: v for k, v in cctv.items() if v is not None}
     if len(get_cctv) >= 1:
-        update_result = await db["cctv"].update_one({"_id": cctv_id}, {"$set": get_cctv})
+        if "lat" in get_cctv or "lng" in get_cctv:
+            if (temp_cctv := await db["cctv"].find_one({"_id": ObjectId(cctv_id)})) is not None:
+                location = geolocator.reverse(f"{get_cctv.get('lat', temp_cctv['lat'])}, {get_cctv.get('lng', temp_cctv['lng'])}")
+                get_cctv["address"] = str(location)
+
+        update_result = await db["cctv"].update_one({"_id": ObjectId(cctv_id)}, {"$set": get_cctv})
+
         if update_result.modified_count == 1:
             if (updated_cctv := await db["cctv"].find_one({"_id": ObjectId(cctv_id)})) is not None:
                 updated_cctv: CCTVModel = json.loads(json_util.dumps(updated_cctv))

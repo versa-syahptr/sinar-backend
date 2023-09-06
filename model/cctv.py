@@ -26,4 +26,5 @@ class CCTVModel:
     id: JSONObject
     lat: str
     lng: str
+    address: str
     status: str
