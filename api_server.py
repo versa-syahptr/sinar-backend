@@ -34,9 +34,15 @@ async def ping():
     return ApiResponse.success(str(location), message="pong")
 
 
+@app.get("/total-crime")
+async def get_total_cctv():
+    cctv = [doc async for doc in db["cctv"].find({"status": "DANGER"})]
+    return ApiResponse.success(len(cctv))
+
+
 @app.get("/list-cctv")
 async def get_list_cctv():
-    cctv = await db["cctv"].find().to_list(1000)
+    cctv = [doc async for doc in db["cctv"].find()]
     cctv: List[CCTVModel] = json.loads(json_util.dumps(cctv))
     if len(cctv) > 0:
         for item in cctv:
