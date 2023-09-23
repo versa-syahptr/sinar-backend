@@ -1,3 +1,4 @@
+import os
 import json
 from typing import List
 
@@ -18,7 +19,7 @@ app = FastAPI()
 client = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://public:20031015@test-crud.utmjs38.mongodb.net/")
 db = client.sinar
 
-geolocator = GoogleV3(api_key="") # apikey geolocation api
+geolocator = GoogleV3(api_key=os.environ.get("API_KEY")) # apikey geolocation api
 
 @app.get("/")
 async def root():
