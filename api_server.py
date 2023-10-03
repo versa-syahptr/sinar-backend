@@ -1,10 +1,13 @@
+import base64
 import os
 import json
-from typing import List
+from datetime import datetime
+from time import strptime
+from typing import List, Annotated
 
 import motor.motor_asyncio
 from bson import json_util, ObjectId
-from fastapi import FastAPI, Body, Path
+from fastapi import FastAPI, Body, Path, UploadFile, File
 from fastapi.responses import FileResponse
 from fastapi.encoders import jsonable_encoder
 from geopy import GoogleV3
@@ -19,7 +22,7 @@ app = FastAPI()
 client = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://public:20031015@test-crud.utmjs38.mongodb.net/")
 db = client.sinar
 
-geolocator = GoogleV3(api_key=os.environ.get("API_KEY")) # apikey geolocation api
+geolocator = GoogleV3(api_key=os.environ.get("API_KEY", "AIzaSyCZG8tWD6EvDXgmaNzf8ctpbYq3G1ne4jU")) # apikey geolocation api
 
 @app.get("/")
 async def root():
@@ -102,6 +105,32 @@ async def update_cctv(cctv_id:str, body=Body(...)):
         existing_cctv["_id"] = existing_cctv["_id"]["$oid"]
         return ApiResponse.success(existing_cctv)
     return ApiResponse.failed(f"CCTV {cctv_id} not found")
+
+
+@app.post("/insert-report")
+async def insert_report(name:Annotated[str, Body()] = None, title:Annotated[str, Body()] = None, address:Annotated[str, Body()] = None, date:Annotated[str, Body()] = None, image: UploadFile = File(...)):
+    # datetime_object = datetime.strptime(date, '%y/%m/%d %H:%M:%S')
+    report: dict = {
+        "name": name,
+        "title": title, "address": address, "date": str(date),
+                    "image": base64.b64encode(await image.read()).decode('ascii')}
+    new_report = await db["report"].insert_one(report)
+    created_report = await db["report"].find_one({"_id": ObjectId(new_report.inserted_id)})
+    created_report = json.loads(json_util.dumps(created_report))
+    created_report["_id"] = created_report["_id"]["$oid"]
+    # created_report["date"] = created_report["date"]["$date"]
+    return ApiResponse.success(created_report)
+
+
+@app.get("/list-report")
+async def get_list_report():
+    report = [doc async for doc in db["report"].find()]
+    report: List[CCTVModel] = json.loads(json_util.dumps(report))
+    if len(report) > 0:
+        for item in report:
+            item["_id"] = item["_id"]["$oid"]
+            # item["date"] = item["date"]["$date"]
+    return ApiResponse.success(report)
 
 
 @app.get("/start-tracker/{cctv_id}")
