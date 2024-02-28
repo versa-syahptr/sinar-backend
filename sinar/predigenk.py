@@ -12,7 +12,7 @@ from notification_service import send_alert_notification
 class Anbev():
     def __init__(self, model,**kwargs) -> None:
         self.name = "Anbev"
-        with tf.device("CPU"):
+        with tf.device("CPU"): # type: ignore
             self.model = tf.keras.models.load_model(model)
         logger.info(f"Analysis Behavior model loaded [{model}]")
 
@@ -26,12 +26,14 @@ class Anbev():
         return len(self.centroids) >= self.size
 
     def predict(self):
+        if self.model is None:
+            return
         self.idx_frame = 0
         df = make_dataframe(self.centroids)
         # PREDICT
         x = fill_square(df.values, self.size)
         logger.info("Analysis Behavior predicting ")
-        with tf.device("CPU"):
+        with tf.device("CPU"): # type: ignore
             pred = self.model(np.array([x])).numpy().round().astype(int)[0,0]
         logger.info(f"preds result: {'GENG MOTOR' if pred else 'aman 👌'}")
         return pred

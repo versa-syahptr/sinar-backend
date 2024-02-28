@@ -1,5 +1,6 @@
 import base64
 import os
+import sys
 import json
 from datetime import datetime
 from time import strptime
@@ -14,8 +15,9 @@ from geopy import GoogleV3
 
 
 from base_response import ApiResponse
-from model.cctv import CCTVModel
+from cctv import CCTVModel
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sinar
 
 app = FastAPI()

@@ -1,8 +1,10 @@
+from typing import Union, Optional, Literal, TypeVar
+
 from ultralytics import YOLO
-from multiprocessing import Event
+from multiprocessing.synchronize import Event
 import time
 
-from .stream import RTMPStream
+from .stream import RTMPStream, BaseStream
 from .predigenk import Anbev
 from .utils import cvtext, check_stream
 from .logger import logger
@@ -13,22 +15,25 @@ MAXSHAPE = 30
 SAMPLING = 5
 STEP = 1
 
-# logger = get(__name__)
+# sentinel stream for default streamto parameter, disallowing None
+_sentinel_stream = BaseStream()
+
 
 class SINAR:
-    def __init__(self, yolo_model, abModel):
-        self.yolo_model = YOLO(yolo_model)
+    def __init__(self, yolo_model, abModel, device: Optional[Union[int, Literal["cpu"]]]=0):
+        self.yolo_model = YOLO(yolo_model, task="detect")
         # self.yolo_model.to(0)
-        self.yolo_model.fuse()
+        self.device = device
+        # self.yolo_model.fuse()
         
         # self.device = device
         logger.info(f"yolo model loaded [{yolo_model}]")
         self.ab_predictor = Anbev(abModel, threaded=False)
     
     def __call__(self, source,
-                 streamto: RTMPStream = None, 
+                 streamto: BaseStream = _sentinel_stream, 
                  frame_preprocessor=None, 
-                 stop_event: Event = None):
+                 stop_event: Optional[Event] = None):
 
         # check stream availability
         retry_count = 0
@@ -38,7 +43,9 @@ class SINAR:
             retry_count += 1
         
         cam_id = source.split("/")[-1]
-        result_generator = self.yolo_model.track(source, device=0, stream=True, verbose=False)
+        result_generator = self.yolo_model.track(source, device=self.device, stream=True, 
+                                                 verbose=True, stream_buffer=True, 
+                                                 vid_stride=True, tracker="bytetrack.yaml")
         logger.info(f"tracker start ({source})")
         pred = False
         img_index = 0
@@ -66,8 +73,7 @@ class SINAR:
                 frame = frame_preprocessor(frame)
 
             # write to stream
-            if streamto is not None:
-                streamto.write(frame)
+            streamto.write(frame)
             # stop event
             if stop_event is not None and stop_event.is_set():
                 break

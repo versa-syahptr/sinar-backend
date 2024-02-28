@@ -5,7 +5,17 @@ import os
 RTMP_URL="rtmp://a.rtmp.youtube.com/live2/"
 YTSTREAM = RTMP_URL + os.environ.get("SINAR_YT_KEY", '')
 
-class RTMPStream:
+class BaseStream:
+    def __init__(self) -> None:
+        pass
+    def start(self, output : str):
+        pass
+    def write(self, frame: np.ndarray):
+        pass
+    def stop(self):
+        pass
+
+class RTMPStream(BaseStream):
     def __init__(self, w, h, fr):
         self.cmd = [
             'ffmpeg',
