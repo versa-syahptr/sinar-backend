@@ -1,6 +1,11 @@
+from pathlib import Path
 from typing import Union, Optional, Literal, TypeVar
 
 from ultralytics import YOLO
+from ultralytics.utils.plotting import colors, Annotator
+from ultralytics.engine.results import Results
+from ultralytics.utils.ops import xyxy2xywh
+from collections import defaultdict
 from multiprocessing.synchronize import Event
 import time
 
@@ -26,6 +31,8 @@ class SINAR:
         self.device = device
         # self.yolo_model.fuse()
         
+        self._tracks = defaultdict(list)
+        
         # self.device = device
         logger.info(f"yolo model loaded [{yolo_model}]")
         self.ab_predictor = Anbev(abModel, threaded=False)
@@ -42,16 +49,16 @@ class SINAR:
             time.sleep(5)
             retry_count += 1
         
-        cam_id = source.split("/")[-1]
+        cam_id = Path(source).stem
         result_generator = self.yolo_model.track(source, device=self.device, stream=True, 
-                                                 verbose=True, stream_buffer=True, 
+                                                 verbose=False, stream_buffer=True, persist=True,
                                                  vid_stride=True, tracker="bytetrack.yaml")
         logger.info(f"tracker start ({source})")
         pred = False
         img_index = 0
         for result in result_generator:
-            frame = result.plot()
-            logger.debug(f"{result.verbose()}; speed: {sum(result.speed.values()):.2f}ms")
+            frame = self._annotate(result)
+            logger.debug(f"{result.verbose()} speed: {sum(result.speed.values()):.2f} ms")
 
             # put result to analysis behavior predictor
             self.ab_predictor.put_result(result.cpu())
@@ -77,8 +84,25 @@ class SINAR:
             # stop event
             if stop_event is not None and stop_event.is_set():
                 break
+        # clear tracks
+        self._tracks.clear()
         logger.info("tracker stop")
         # stop analysis behavior predictor
         # self.ab_predictor.stop()
         streamto.stop()
         logger.info("stream stopped")
+    
+    def _annotate(self, res: Results):
+        im0 = res.orig_img.copy()
+        annotator = Annotator(im0, font_size=8)
+        boxes = res.boxes.xyxy.cpu()
+        if res.boxes.id is not None:
+            track_ids = res.boxes.id.cpu().tolist()
+               
+            for box, track_id in zip(boxes, track_ids):
+                annotator.box_label(box, label=f"{int(track_id)}", color=colors(int(track_id)))
+                x, y, w, h = xyxy2xywh(box)
+                tracks = self._tracks[track_id]
+                tracks.append((x, y))
+                annotator.draw_centroid_and_tracks(tracks, color=colors(int(track_id)))
+        return annotator.result()

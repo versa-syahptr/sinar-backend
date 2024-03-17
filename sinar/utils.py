@@ -40,7 +40,8 @@ def cvtext(frame, text):
     font_scale = 1.5
     text_color = (0,0, 255)  # White color
     text_thickness = 3
-    text_position = (320, 240)  # (x, y) position of the text
+    # set text position in the middle of the frame
+    text_position = (int((frame.shape[1] - len(text) * 20) / 2), int(frame.shape[0] / 2))
     cv2.putText(frame, text, text_position, font, font_scale, text_color, text_thickness)
     return frame
 
