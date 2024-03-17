@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Union, Optional, Literal, TypeVar
 
+import numpy as np
 from ultralytics import YOLO
 from ultralytics.utils.plotting import colors, Annotator
 from ultralytics.engine.results import Results
@@ -71,6 +72,9 @@ class SINAR:
                     img_index += 1
                     send_alert_notification("ADA GENG MOTOR", "Ada geng motor di depan", cam_id, 
                                             f"http://sinar.versa.my.id/image/{img_index}-{cam_id}.jpg")
+                
+                self._black_annotator(f"{img_index}-{cam_id}.jpg", result.orig_img)
+                img_index += 1
                     
             # do as long as pred is true
             if pred:
@@ -85,6 +89,7 @@ class SINAR:
             if stop_event is not None and stop_event.is_set():
                 break
         # clear tracks
+        self._black_annotator(f"{img_index}-{cam_id}.jpg", result.orig_img)
         self._tracks.clear()
         logger.info("tracker stop")
         # stop analysis behavior predictor
@@ -106,3 +111,12 @@ class SINAR:
                 tracks.append((x, y))
                 annotator.draw_centroid_and_tracks(tracks, color=colors(int(track_id)))
         return annotator.result()
+    
+    def _black_annotator(self, filename : str, orig_img):
+        anot = Annotator(np.zeros_like(orig_img))
+        for track_id, tracks in self._tracks.items():
+            anot.draw_centroid_and_tracks(tracks, color=colors(int(track_id)))
+            # tracks.clear()
+        self._tracks.clear()
+        # anot.show("black")
+        anot.save(str(Path("tracks") / filename))
