@@ -17,7 +17,8 @@ from geopy import GoogleV3
 from base_response import ApiResponse
 from cctv import CCTVModel
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# append parent directory to sys.path to import sinar
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import sinar
 
 app = FastAPI()

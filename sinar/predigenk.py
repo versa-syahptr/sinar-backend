@@ -4,12 +4,13 @@ import tensorflow as tf
 
 from .utils import get_xyid, to_dict, fill_square, make_dataframe
 from .logger import logger
-from notification_service import send_alert_notification
+# from notification_service import send_alert_notification
 
 # logger = get(__name__)
 
-# analysis behavior class
+# 
 class Anbev():
+    """analysis behavior class for detecting geng motor"""
     def __init__(self, model,**kwargs) -> None:
         self.name = "Anbev"
         with tf.device("CPU"): # type: ignore

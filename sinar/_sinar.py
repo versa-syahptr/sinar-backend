@@ -1,19 +1,21 @@
 from pathlib import Path
 from typing import Union, Optional, Literal, TypeVar
 
+import numpy as np
 from ultralytics import YOLO
 from ultralytics.utils.plotting import colors, Annotator
 from ultralytics.engine.results import Results
 from ultralytics.utils.ops import xyxy2xywh
 from collections import defaultdict
 from multiprocessing.synchronize import Event
+from fastapi import WebSocket
 import time
 
 from .stream import RTMPStream, BaseStream
 from .predigenk import Anbev
 from .utils import cvtext, check_stream
 from .logger import logger
-from notification_service import send_alert_notification
+# from notification_service import send_alert_notification
 import cv2
 
 MAXSHAPE = 30
@@ -69,8 +71,8 @@ class SINAR:
                 if pred: # do only once
                     cv2.imwrite(f"/var/www/image/{img_index}-{cam_id}.jpg", frame)
                     img_index += 1
-                    send_alert_notification("ADA GENG MOTOR", "Ada geng motor di depan", cam_id, 
-                                            f"http://sinar.versa.my.id/image/{img_index}-{cam_id}.jpg")
+                    # send_alert_notification("ADA GENG MOTOR", "Ada geng motor di depan", cam_id, 
+                    #                         f"http://sinar.versa.my.id/image/{img_index}-{cam_id}.jpg")
                     
             # do as long as pred is true
             if pred:
@@ -106,3 +108,33 @@ class SINAR:
                 tracks.append((x, y))
                 annotator.draw_centroid_and_tracks(tracks, color=colors(int(track_id)))
         return annotator.result()
+    
+    async def predict_from_websocket(self, ws: WebSocket, 
+                                     streamto: BaseStream = _sentinel_stream,
+                                     frame_preprocessor=None,
+                                     stop_event: Optional[Event] = None):
+        pred = False
+        while True:
+            frame_bytes = await ws.receive_bytes()
+            frame = cv2.imdecode(np.frombuffer(frame_bytes, np.uint8), cv2.IMREAD_COLOR)
+
+            result = self.yolo_model.track(frame, device=self.device, 
+                                           verbose=True, persist=True,
+                                           vid_stride=True, tracker="bytetrack.yaml")[0]
+            frame = self._annotate(result)
+
+            self.ab_predictor.put_result(result.cpu())
+
+            if self.ab_predictor.ready():
+                pred = self.ab_predictor.predict()
+
+            if pred:
+                frame = cvtext(frame, "ADA GENG MOTOR")
+
+            if frame_preprocessor is not None:
+                frame = frame_preprocessor(frame)
+            
+            streamto.write(frame)
+
+            if stop_event is not None and stop_event.is_set():
+                break

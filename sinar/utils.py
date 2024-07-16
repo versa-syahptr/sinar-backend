@@ -1,10 +1,21 @@
 import numpy as np
 import pandas as pd
 import cv2
+from typing import Tuple
+from fastapi import WebSocket
 
 from collections import namedtuple
 
 Process_wrapper = namedtuple("Process_wrapper", "process, stop_event")
+
+
+class WebSocketCapture:
+    def __init__(self, ws: WebSocket) -> None:
+        self.ws = ws
+    
+    async def read(self) -> Tuple[bool, np.ndarray]:
+        frame_bytes = await self.ws.receive_bytes()
+
 
 def get_xyid(boxes, norm=True):
     if norm:
