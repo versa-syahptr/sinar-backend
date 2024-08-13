@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union, Optional, Literal, TypeVar
+from typing import Union, Optional, Literal, TypeVar, Callable
 
 import numpy as np
 from ultralytics import YOLO
@@ -38,53 +38,94 @@ class SINAR:
         # self.device = device
         logger.info(f"yolo model loaded [{yolo_model}]")
         self.ab_predictor = Anbev(abModel, threaded=False)
+        self.geng_detected = False
+        self.detected_action : Optional[Callable] = None
+    
+    def register_detected_action(self, action: Callable):
+        self.detected_action = action
+    
+    def predict_frame(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Predict frame from numpy array
+        This method should be called in a loop to get the prediction result
+        Useful for custom main loop
+
+        Args:
+            frame (np.ndarray): input frame
+        
+        Returns:
+            np.ndarray: annotated frame
+        """
+        result = self.yolo_model.track(frame, device=self.device, 
+                                       verbose=False, stream_buffer=True, 
+                                       persist=True, vid_stride=True, 
+                                       tracker="bytetrack.yaml")[0]
+        frame = self._annotate(result)
+        logger.debug(f"{result.verbose()} speed: {sum(result.speed.values()):.2f} ms")
+
+        # put result to analysis behavior predictor
+        self.ab_predictor.put_result(result.cpu())
+
+        # predict
+        if self.ab_predictor.ready():
+            self.geng_detected = self.ab_predictor.predict()
+            if self.geng_detected and self.detected_action is not None: # do only once
+                self.detected_action()
+                
+        # do as long as pred is true
+        if self.geng_detected:
+            frame = cvtext(frame, "ADA GENG MOTOR")
+
+        return frame
     
     def __call__(self, source,
                  streamto: BaseStream = _sentinel_stream, 
-                 frame_preprocessor=None, 
+                 frame_preprocessor : Optional[Callable] = None, 
                  stop_event: Optional[Event] = None):
+        self.main_loop(source, streamto, frame_preprocessor, stop_event)
+    
+    def main_loop(self, source,
+                 streamto: BaseStream = _sentinel_stream, 
+                 frame_preprocessor : Optional[Callable] = None, 
+                 stop_event: Optional[Event] = None):
+        """
+        Sinar main loop
+
+        Args:
+            source (str): source of the stream, could be a file path or an url
+            streamto (BaseStream, optional): stream to write the result. Defaults to _sentinel_stream.
+            frame_preprocessor (Optional[Callable], optional): frame preprocessor. Defaults to None.
+            stop_event (Optional[Event], optional): stop event. Defaults to None.
+
+        """
+
+        capture = cv2.VideoCapture(source)
 
         # check stream availability
         retry_count = 0
-        while not check_stream(source):
+        while not capture.isOpened():
             logger.info(f"({retry_count}) stream {source} is offline, retrying...")
             time.sleep(5)
             retry_count += 1
         
         cam_id = Path(source).stem
-        result_generator = self.yolo_model.track(source, device=self.device, stream=True, 
-                                                 verbose=False, stream_buffer=True, persist=True,
-                                                 vid_stride=True, tracker="bytetrack.yaml")
+
         logger.info(f"tracker start ({source})")
-        pred = False
-        img_index = 0
-        for result in result_generator:
-            frame = self._annotate(result)
-            logger.debug(f"{result.verbose()} speed: {sum(result.speed.values()):.2f} ms")
+        # for result in result_generator:
+        while True:
+            ret, frame = capture.read()
+            if not ret:
+                break
 
-            # put result to analysis behavior predictor
-            self.ab_predictor.put_result(result.cpu())
-
-            # predict
-            if self.ab_predictor.ready():
-                pred = self.ab_predictor.predict()
-                if pred: # do only once
-                    cv2.imwrite(f"/var/www/image/{img_index}-{cam_id}.jpg", frame)
-                    img_index += 1
-                    # send_alert_notification("ADA GENG MOTOR", "Ada geng motor di depan", cam_id, 
-                    #                         f"http://sinar.versa.my.id/image/{img_index}-{cam_id}.jpg")
-                    
-            # do as long as pred is true
-            if pred:
-                frame = cvtext(frame, "ADA GENG MOTOR")
+            frame = self.predict_frame(frame)
 
             if frame_preprocessor is not None:
                 frame = frame_preprocessor(frame)
 
             # write to stream
-            streamto.write(frame)
+            is_stop = streamto.write(frame)
             # stop event
-            if stop_event is not None and stop_event.is_set():
+            if (stop_event is not None and stop_event.is_set()) or not is_stop:
                 break
         # clear tracks
         self._tracks.clear()

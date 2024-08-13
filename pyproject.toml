@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sinar"
+version = "0.1.0"
+description = "A CLI tool for sinar module"
+dependencies = [
+    "scikit-learn",
+    "tensorflow",
+    "torch",
+    "torchvision",
+    "supervision==0.1.0",
+    "ultralytics"
+]
+
+[project.optional-dependencies]
+service = ["fastapi", "uvicorn", "websocket"]  # List dependencies for the service feature
+annotator = ["labelimg"] # List dependencies for the annotator feature
+
+[project.scripts]
+sinar = "sinar.main:main"
+
+
+[tool.setuptools]
+packages = ["sinar"]
+
+

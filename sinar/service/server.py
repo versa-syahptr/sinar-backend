@@ -14,8 +14,8 @@ from fastapi.encoders import jsonable_encoder
 from geopy import GoogleV3
 
 
-from base_response import ApiResponse
-from cctv import CCTVModel
+from .base_response import ApiResponse
+from .cctv import CCTVModel
 
 # append parent directory to sys.path to import sinar
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))

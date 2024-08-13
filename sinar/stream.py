@@ -1,6 +1,8 @@
 import subprocess
 import numpy as np
 import os
+import cv2
+
 
 RTMP_URL="rtmp://a.rtmp.youtube.com/live2/"
 YTSTREAM = RTMP_URL + os.environ.get("SINAR_YT_KEY", '')
@@ -10,7 +12,7 @@ class BaseStream:
         pass
     def start(self, output : str):
         pass
-    def write(self, frame: np.ndarray):
+    def write(self, frame: np.ndarray) -> bool:
         pass
     def stop(self):
         pass
@@ -56,3 +58,60 @@ class RTMPStream(BaseStream):
         self.proc.terminate()
         self.proc.wait()
         self.proc = None
+
+
+class Viewer(BaseStream):
+    def __init__(self, title="result", stop_key='q'):
+        """
+        Viewer class to display the result
+
+        Args: 
+            title (str, optional): title of the window. Defaults to "result".
+            stop_key (str, optional): key to stop the viewer. Defaults to 'q'.
+        
+        """
+        self.title = title
+        self.stop_key = stop_key
+
+    def write(self, frame: np.ndarray) -> bool:
+        """
+        Write frame to the viewer
+        
+        Args: 
+            frame (np.ndarray): frame to write
+            
+        Returns: 
+            bool: True if the viewer is still running, False otherwise
+        """
+        cv2.imshow(self.title, frame)
+        if cv2.waitKey(1) & 0xFF == ord(self.stop_key):
+            return False
+        return True
+    def stop(self):
+        return cv2.destroyAllWindows()
+    
+
+class Saver(Viewer):
+    def __init__(self,  w, h, fps, title="result", output="output.mp4"):
+        """
+        Saver class to save the result to a file
+
+        Args:
+            w (int): width of the video
+            h (int): height of the video
+            fps (int): frame per second
+            title (str, optional): title of the window. Defaults to "result".
+            output (str, optional): output file. Defaults to "output.mp4".
+        
+        """
+        super().__init__(title)
+        self.output = output
+        self.writer = cv2.VideoWriter(output, cv2.VideoWriter_fourcc(*'MP4V'), fps, (w, h))
+
+    def write(self, frame: np.ndarray):
+        self.writer.write(frame)
+        return super().write(frame)
+    
+    def stop(self):
+        self.writer.release()
+        return super().stop()
