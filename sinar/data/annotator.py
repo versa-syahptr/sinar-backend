@@ -22,7 +22,7 @@ def extract_frames(video_path: Path, output_dir: Path, fps: int = 1):
         "-vf", f"fps={fps}",
         str(output_dir / filename_patern)
     ]
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) # hide output
     logger.info("[extract_frames] Done!")
 
 def auto_annotate(model_path: Path, frame_dir: Path, output_dir: Path):
@@ -33,7 +33,9 @@ def auto_annotate(model_path: Path, frame_dir: Path, output_dir: Path):
         label_path = output_dir / f"{Path(res.path).stem}.txt"
         res.save_txt(label_path)
         logger.info(f"[auto_annotate] {label_path} saved")
-    classes_path = output_dir / "classes.txt"
+    
+    # write classes.txt in output_dir parent
+    classes_path = output_dir.parent / "classes.txt"
     with open(classes_path, "w") as f:
         f.write("\n".join(res.names.values()))
     logger.info(f"[auto_annotate] {classes_path} saved")
@@ -50,10 +52,31 @@ def start_labeler(images_dir: Path, labels_dir: Path):
     subprocess.run(cmd, check=True)
     logger.info("[labeler] Done!")
 
+def convert_to_label_studio_format(data_dir: Path, subset: str):
+    output_path = data_dir / f"{subset}.json"
+    logger.info(f"[label_studio_converter] Converting {data_dir} to {output_path} for subset {subset}")
+    cmd = [
+        "label-studio-converter",
+        "import",
+        "yolo",
+        "-i", str(data_dir),
+        "-o", str(output_path),
+        "--out-type", "predictions",
+        "--image-root-url", f"/data/local-files/?d=dataset/{subset}/images/"
+    ]
+    subprocess.run(cmd, check=True)
+    logger.info("[label_studio_converter] Done!")
+
 def main(args):
     video_path = args.video_path
     fps = args.fps
     model_path = args.model
+    dataset_path = args.dataset_path
+
+    # # check video path is relative to dataset path
+    if not video_path.is_absolute():
+        video_path = dataset_path / video_path
+
     logger.info(f"video_path: {video_path}")
     logger.info(f"fps: {fps}")
     logger.info(f"model_path: {model_path}")
@@ -63,32 +86,35 @@ def main(args):
         logger.error("ffmpeg not found, please install ffmpeg")
         return 1
     
-    # check labelImg
-    try:
-        subprocess.run(["labelImg", "-h"], check=True)
-    except:
-        logger.error("labelImg not found, please install annotator feature")
-        return
+    # do not check labelImg
+    # try:
+    #     subprocess.run(["labelImg", "-h"], check=True)
+    # except:
+    #     logger.error("labelImg not found, please install annotator feature")
+    #     return
     
     # create paths
-    global_dataset_path = video_path.parents[1]
-    dataset_path = global_dataset_path / video_path.stem
-    for mode in ("val", "train"):
-        image_path = dataset_path / mode / "images"
-        label_path = dataset_path / mode / "labels"
-        image_path.mkdir(parents=True, exist_ok=True)
-        print(image_path, "created")
-        label_path.mkdir(parents=True, exist_ok=True)
-        print(label_path, "created")
+    # global_dataset_path = video_path.parents[1]
+    subset_path = dataset_path / video_path.stem
+    subset_path.mkdir(parents=True, exist_ok=True)
+    # for mode in ("val", "train"):
+    image_path = subset_path / "images"
+    label_path = subset_path / "labels"
+    image_path.mkdir(parents=True, exist_ok=True)
+    print(image_path, "created")
+    label_path.mkdir(parents=True, exist_ok=True)
+    print(label_path, "created")
     
     # extract frames
     extract_frames(video_path, image_path, fps)
     # auto annotate
     auto_annotate(model_path, image_path, label_path)
     # start labeler
-    start_labeler(image_path, label_path)
-    # done
-    print("Done!")
+    # start_labeler(image_path, label_path)
+
+    # convert to label studio format
+    convert_to_label_studio_format(subset_path, video_path.stem)
+    
     return 0
 
 

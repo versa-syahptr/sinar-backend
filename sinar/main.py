@@ -4,12 +4,27 @@ from pathlib import Path
 
 from supervision.video.dataclasses import VideoInfo
 
-from sinar.data import annotator
+from sinar.data import annotator, viewer
 from sinar import SINAR
 from sinar import stream
 
 
 DESCRIPTION = "SINAR: "
+
+
+def annotator_dry_run(args):
+    video_path = args.video_path
+    fps = args.fps
+    model_path = args.model
+    dataset_path = args.dataset_path
+    if not video_path.is_absolute():
+        video_path = dataset_path / video_path
+
+    print(f"video_path: {video_path}")
+    print(f"fps: {fps}")
+    print(f"model_path: {model_path}")
+    print(f"dataset_path: {dataset_path}")
+    print(f"unix video_path: {video_path.as_posix()}")
 
 def handle_centrogen(args):
     # TODO: Implement centrogen
@@ -61,15 +76,21 @@ def main():
     # Data > Annotate subcommand
     parser_annotate = subparsers_data.add_parser('annotate', help='Auto annotate video frames')
     parser_annotate.add_argument('-m', "--model", type=Path, required=True, help="Path to YOLO model")
-    parser_annotate.add_argument("video_path", type=Path, help="Path to video file")
+    parser_annotate.add_argument('-d', "--dataset-path", type=Path, required=True, help="Path to dataset")
+    parser_annotate.add_argument('-v', "--video-path", type=Path, help="Path to video file")
     parser_annotate.add_argument("-fps", type=int, default=1, help="Frame per second to extract")
     parser_annotate.set_defaults(func=annotator.main)
+    # parser_annotate.set_defaults(func=annotator_dry_run)
 
     # Data > Centrogen subcommand
     parser_centrogen = subparsers_data.add_parser('centrogen', help='Generate center points from video')
     parser_centrogen.add_argument("video_path", type=Path, help="Path to video file")
     parser_centrogen.set_defaults(func=handle_centrogen)
 
+    # Data > View subcommand
+    parser_validate = subparsers_data.add_parser('view', help='View the dataset with pre-annotated bounding boxes')
+    parser_validate.add_argument("dataset_dir", type=Path, help="Path to the YOLO dataset directory")
+    parser_validate.set_defaults(func=viewer.main)
 
     # Train subcommand
     parser_train = subparsers.add_parser('train', help='Train the model')
