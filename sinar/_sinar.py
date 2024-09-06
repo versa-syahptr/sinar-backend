@@ -8,7 +8,6 @@ from ultralytics.engine.results import Results
 from ultralytics.utils.ops import xyxy2xywh
 from collections import defaultdict
 from multiprocessing.synchronize import Event
-# from fastapi import WebSocket
 import time
 
 from .stream import RTMPStream, BaseStream
