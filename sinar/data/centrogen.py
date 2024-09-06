@@ -5,6 +5,9 @@ import pandas as pd
 import tensorflow as tf
 
 from ultralytics import YOLO
+from ultralytics.utils import LOGGER as UL_LOGGER
+import logging
+import tempfile
 
 from sinar.utils import fill_square, get_xyid, to_dict
 
@@ -39,37 +42,47 @@ class Centrogen:
     def __init__(self, model_path: str, 
                  device: str = "cpu", 
                  do_augmentation: bool = True, 
-                 output_shape: tuple = (30, 30)):
+                 output_shape: tuple = (30, 30),
+                 verbose: bool = False):
         
         self.model_path = model_path
         self.device = device
         self.do_augmentation = do_augmentation
         self.output_shape = output_shape
+        self.verbose = verbose
+        self.dataset = None
+    
+    def _print(self, *args, **kwargs):
+        if self.verbose:
+            tf.print(*args, **kwargs)
 
     def create_matrices_from_videos(self, video_path: str) -> np.ndarray:
-
+        if not self.verbose: # suppress ultralytics logger
+            _log_level = UL_LOGGER.level
+            UL_LOGGER.setLevel(logging.ERROR)
         # check if model_path and video_path are tensors
-        tf.print(f"\nprocessing {video_path}")
+        self._print(f"\nprocessing {video_path}")
         if isinstance(video_path, tf.Tensor):
             video_path = video_path.numpy().decode('utf-8')
 
-        yolo = YOLO(self.model_path, task="detect")
+        yolo = YOLO(self.model_path, task="detect", verbose=self.verbose)
         # augment video
         if self.do_augmentation:
             flip_code, tx, ty, angle = generate_augmentation_parameters()
-            tf.print(f"Augmentation params: flip: {flip_code}, tx: {tx}, ty: {ty}, angle: {angle}")
+            self._print(f"Augmentation params: flip: {flip_code}, tx: {tx}, ty: {ty}, angle: {angle}")
 
             
         cap = cv2.VideoCapture(video_path)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         # usable_frames = total_frames - (total_frames % 150)
-        tf.print(f"Total frames: {total_frames}") #, using {usable_frames} frames")
+        self._print(f"Total frames: {total_frames}") #, using {usable_frames} frames")
         # if usable_frames == 0:
         #     raise ValueError(f"Video {video_path} is too short, fix it!")
 
         # generate matrices rows
         rows = []
         # for _ in range(usable_frames):
+        all_id = set()
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -90,9 +103,10 @@ class Centrogen:
 
             ids, xy = get_xyid(res.boxes)
             rows.append(to_dict(ids, xy, flatten=True))
+            all_id.update(ids.astype(int))
             
         cap.release()
-
+        self._print(f"unique ids ({len(all_id)}) : {all_id}")
         # last_frame_idx = 0
         matrices = []
         # while last_frame_idx < total_frames and total_frames-last_frame_idx > 150:
@@ -112,7 +126,7 @@ class Centrogen:
             if start_frame + (30 - 1) * 5 >= total_frames:
                 break
             # last_frame_idx = frame_idx + 1
-        
+        if not self.verbose: UL_LOGGER.setLevel(_log_level)
         return np.array(matrices, dtype=np.float32)
 
     def map_files_to_labels(self, file_path):
@@ -137,7 +151,7 @@ class Centrogen:
         # labeled_matrices = [(matrix, label) for matrix in matrices]
         return matrices, labels
     
-    def flow_from_directory(self, directory: str, batch_size: int = 32, glob = "*.mp4"):
+    def flow_from_directory(self, directory: str, batch_size: int = 32, glob = "*.mp4", cache: bool = False):
         directory = os.path.join(directory, glob)
         file_ds = tf.data.Dataset.list_files(directory)
         # map files to labels to create (file_path, label) tuples
@@ -147,5 +161,19 @@ class Centrogen:
                                     tf.data.Dataset.from_tensor_slices(self._parse_function(video_path, label)))
         if batch_size is not None:
             dataset = dataset.batch(batch_size)
+            if cache: 
+                dataset = dataset.cache()
+            dataset = dataset.prefetch(tf.data.AUTOTUNE)
+
+        self.dataset = dataset
         return dataset
+    
+    def regenerate_dataset(self):
+        if self.dataset is None:
+            raise ValueError("Dataset is not yet created, call flow_from_directory first")
+        
+        tmpdir = tempfile.mkdtemp()
+        self.dataset.save(tmpdir)
+        loaded_ds = tf.data.Dataset.load(tmpdir)
+        return loaded_ds
         

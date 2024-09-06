@@ -8,7 +8,7 @@ from ultralytics.engine.results import Results
 from ultralytics.utils.ops import xyxy2xywh
 from collections import defaultdict
 from multiprocessing.synchronize import Event
-from fastapi import WebSocket
+# from fastapi import WebSocket
 import time
 
 from .stream import RTMPStream, BaseStream
@@ -150,32 +150,32 @@ class SINAR:
                 annotator.draw_centroid_and_tracks(tracks, color=colors(int(track_id)))
         return annotator.result()
     
-    async def predict_from_websocket(self, ws: WebSocket, 
-                                     streamto: BaseStream = _sentinel_stream,
-                                     frame_preprocessor=None,
-                                     stop_event: Optional[Event] = None):
-        pred = False
-        while True:
-            frame_bytes = await ws.receive_bytes()
-            frame = cv2.imdecode(np.frombuffer(frame_bytes, np.uint8), cv2.IMREAD_COLOR)
+    # async def predict_from_websocket(self, ws: WebSocket, 
+    #                                  streamto: BaseStream = _sentinel_stream,
+    #                                  frame_preprocessor=None,
+    #                                  stop_event: Optional[Event] = None):
+    #     pred = False
+    #     while True:
+    #         frame_bytes = await ws.receive_bytes()
+    #         frame = cv2.imdecode(np.frombuffer(frame_bytes, np.uint8), cv2.IMREAD_COLOR)
 
-            result = self.yolo_model.track(frame, device=self.device, 
-                                           verbose=True, persist=True,
-                                           vid_stride=True, tracker="bytetrack.yaml")[0]
-            frame = self._annotate(result)
+    #         result = self.yolo_model.track(frame, device=self.device, 
+    #                                        verbose=True, persist=True,
+    #                                        vid_stride=True, tracker="bytetrack.yaml")[0]
+    #         frame = self._annotate(result)
 
-            self.ab_predictor.put_result(result.cpu())
+    #         self.ab_predictor.put_result(result.cpu())
 
-            if self.ab_predictor.ready():
-                pred = self.ab_predictor.predict()
+    #         if self.ab_predictor.ready():
+    #             pred = self.ab_predictor.predict()
 
-            if pred:
-                frame = cvtext(frame, "ADA GENG MOTOR")
+    #         if pred:
+    #             frame = cvtext(frame, "ADA GENG MOTOR")
 
-            if frame_preprocessor is not None:
-                frame = frame_preprocessor(frame)
+    #         if frame_preprocessor is not None:
+    #             frame = frame_preprocessor(frame)
             
-            streamto.write(frame)
+    #         streamto.write(frame)
 
-            if stop_event is not None and stop_event.is_set():
-                break
+    #         if stop_event is not None and stop_event.is_set():
+    #             break

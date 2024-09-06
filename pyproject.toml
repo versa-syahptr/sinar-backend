@@ -12,7 +12,8 @@ dependencies = [
     "torch",
     "torchvision",
     "supervision==0.1.0",
-    "ultralytics"
+    "ultralytics",
+    "colorlog"
 ]
 
 [project.optional-dependencies]

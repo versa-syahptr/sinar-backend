@@ -25,10 +25,10 @@ def extract_frames(video_path: Path, output_dir: Path, fps: int = 1):
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) # hide output
     logger.info("[extract_frames] Done!")
 
-def auto_annotate(model_path: Path, frame_dir: Path, output_dir: Path):
+def auto_annotate(model_path: Path, frame_dir: Path, output_dir: Path, **kwargs):
     logger.info(f"[auto_annotate] Annotating {frame_dir} using {model_path} and save to {output_dir}")
     model = YOLO(model_path, task="detect")
-    results = model(frame_dir, stream=True)
+    results = model(frame_dir, stream=True, **kwargs)
     for res in results:
         label_path = output_dir / f"{Path(res.path).stem}.txt"
         res.save_txt(label_path)
