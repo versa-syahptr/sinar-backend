@@ -6,6 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "sinar"
 version = "0.1.0"
 description = "A CLI tool for sinar module"
+authors = [
+    {name = "Versa Syahputra", email = "versa1220@gmail.com"}
+]
 dependencies = [
     "scikit-learn",
     "tensorflow",
@@ -24,7 +27,8 @@ annotator = ["labelimg"] # List dependencies for the annotator feature
 sinar = "sinar.main:main"
 
 
-[tool.setuptools]
-packages = ["sinar"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sinar", "sinar.*"]
 
 
