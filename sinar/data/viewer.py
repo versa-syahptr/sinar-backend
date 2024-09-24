@@ -38,7 +38,7 @@ def main(args):
         # show image
         cv2.imshow("image", image)
         # wait for space key and continue next image
-        if cv2.waitKey(0) == ord(" "):
+        if cv2.waitKey(5) == ord(" "):
             continue
         # break if q key is pressed
         if cv2.waitKey(0) == ord("q"):

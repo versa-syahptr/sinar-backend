@@ -11,3 +11,7 @@ key
 .vscode
 models
 *.jpg
+build
+dist
+*.egg-info
+plots

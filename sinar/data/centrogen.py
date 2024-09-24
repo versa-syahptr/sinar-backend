@@ -1,4 +1,5 @@
 import os
+from typing import Tuple, Union
 import cv2
 import numpy as np
 import pandas as pd
@@ -9,7 +10,7 @@ from ultralytics.utils import LOGGER as UL_LOGGER
 import logging
 import tempfile
 
-from sinar.utils import fill_square, get_xyid, to_dict
+from sinar.utils import fill_square, get_xyid, to_dict, flatten_matrix
 
 def generate_augmentation_parameters():
     # Generate random parameters for flip, translation, and rotation
@@ -51,6 +52,7 @@ class Centrogen:
         self.output_shape = output_shape
         self.verbose = verbose
         self.dataset = None
+        self._batch_size = None
     
     def _print(self, *args, **kwargs):
         if self.verbose:
@@ -71,17 +73,16 @@ class Centrogen:
             flip_code, tx, ty, angle = generate_augmentation_parameters()
             self._print(f"Augmentation params: flip: {flip_code}, tx: {tx}, ty: {ty}, angle: {angle}")
 
+
+            
+            
             
         cap = cv2.VideoCapture(video_path)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        # usable_frames = total_frames - (total_frames % 150)
-        self._print(f"Total frames: {total_frames}") #, using {usable_frames} frames")
-        # if usable_frames == 0:
-        #     raise ValueError(f"Video {video_path} is too short, fix it!")
+        self._print(f"Total frames: {total_frames}")
 
         # generate matrices rows
         rows = []
-        # for _ in range(usable_frames):
         all_id = set()
         while True:
             ret, frame = cap.read()
@@ -109,7 +110,6 @@ class Centrogen:
         self._print(f"unique ids ({len(all_id)}) : {all_id}")
         # last_frame_idx = 0
         matrices = []
-        # while last_frame_idx < total_frames and total_frames-last_frame_idx > 150:
         for start_point in range(0, total_frames, 5):
             for start_frame in range(start_point, start_point+5):
                 matrix = []
@@ -125,9 +125,13 @@ class Centrogen:
                 matrices.append(matrix)
             if start_frame + (30 - 1) * 5 >= total_frames:
                 break
-            # last_frame_idx = frame_idx + 1
         if not self.verbose: UL_LOGGER.setLevel(_log_level)
         return np.array(matrices, dtype=np.float32)
+
+    def _flatten_matrix(self, matrix):
+        flattened = tf.py_function(flatten_matrix, [matrix], tf.float32)
+        flattened.set_shape([self.output_shape[0] * self.output_shape[1]])
+        return flattened
 
     def map_files_to_labels(self, file_path):
         parts = tf.strings.split(file_path, os.path.sep)
@@ -157,10 +161,11 @@ class Centrogen:
         # map files to labels to create (file_path, label) tuples
         labeled_ds = file_ds.map(self.map_files_to_labels)
         # create matrices from videos and pair them with labels
-        dataset = labeled_ds.flat_map(lambda video_path, label: 
-                                    tf.data.Dataset.from_tensor_slices(self._parse_function(video_path, label)))
+        dataset = labeled_ds.map(self._parse_function, num_parallel_calls=tf.data.AUTOTUNE)
+        dataset = dataset.unbatch()
         if batch_size is not None:
             dataset = dataset.batch(batch_size)
+            self._batch_size = batch_size
             if cache: 
                 dataset = dataset.cache()
             dataset = dataset.prefetch(tf.data.AUTOTUNE)
@@ -169,11 +174,31 @@ class Centrogen:
         return dataset
     
     def regenerate_dataset(self):
+        """Regenerate the dataset with the same batch size
+        unpack matrices and labels from the dataset -> zip them -> batch them
+
+        Returns:
+            tf.data.Dataset: regenerated dataset with known cardinality
+        """
         if self.dataset is None:
             raise ValueError("Dataset is not yet created, call flow_from_directory first")
         
-        tmpdir = tempfile.mkdtemp()
-        self.dataset.save(tmpdir)
-        loaded_ds = tf.data.Dataset.load(tmpdir)
-        return loaded_ds
+        regenerated_ds = tf.data.Dataset.zip(*map(tf.data.Dataset.from_tensor_slices, map(np.array, 
+                                            zip(*self.dataset.unbatch().as_numpy_iterator()))))
+        regenerated_ds = regenerated_ds.batch(self._batch_size)
+        return regenerated_ds
+    
+    def create_flatten_dataset(self, return_numpy = False) -> Union[tf.data.Dataset, Tuple[np.ndarray, np.ndarray]]:
+        if self.dataset is None:
+            raise ValueError("Dataset is not yet created, call flow_from_directory first")
         
+        # check if the dataset is batched
+        if self.dataset.element_spec[0].shape[0] is None:
+            self.dataset = self.dataset.unbatch()
+        
+        flatten_ds = self.dataset.map(lambda x, y: (self._flatten_matrix(x), y),
+                                      num_parallel_calls=tf.data.AUTOTUNE)
+        if return_numpy:
+            features, labels = map(np.array, zip(*list(flatten_ds.as_numpy_iterator())))
+            return features, labels
+        return flatten_ds

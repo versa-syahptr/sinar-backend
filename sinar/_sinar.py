@@ -10,10 +10,10 @@ from collections import defaultdict
 from multiprocessing.synchronize import Event
 import time
 
-from .stream import RTMPStream, BaseStream
-from .predigenk import Anbev
-from .utils import cvtext, check_stream
-from .logger import logger
+from sinar.stream import RTMPStream, BaseStream
+from sinar.motas import Motas
+from sinar.utils import cvtext, check_stream
+from sinar.logger import logger
 # from notification_service import send_alert_notification
 import cv2
 
@@ -26,17 +26,20 @@ _sentinel_stream = BaseStream()
 
 
 class SINAR:
-    def __init__(self, yolo_model, abModel, device: Optional[Union[int, Literal["cpu"]]]=0):
+    def __init__(self, yolo_model, motas_model, 
+                 live_stream: bool = False,
+                 device: Optional[Union[int, Literal["cpu"]]]=0):
         self.yolo_model = YOLO(yolo_model, task="detect")
         # self.yolo_model.to(0)
         self.device = device
         # self.yolo_model.fuse()
+        self.live_stream = live_stream
         
         self._tracks = defaultdict(list)
         
         # self.device = device
         logger.info(f"yolo model loaded [{yolo_model}]")
-        self.ab_predictor = Anbev(abModel, threaded=False)
+        self.motas = Motas(motas_model, live_stream=live_stream)
         self.geng_detected = False
         self.detected_action : Optional[Callable] = None
     
@@ -63,11 +66,11 @@ class SINAR:
         logger.debug(f"{result.verbose()} speed: {sum(result.speed.values()):.2f} ms")
 
         # put result to analysis behavior predictor
-        self.ab_predictor.put_result(result.cpu())
+        self.motas.put_result(result.cpu())
 
-        # predict
-        if self.ab_predictor.ready():
-            self.geng_detected = self.ab_predictor.predict()
+        # predict on demand if ready and in live stream mode
+        if self.live_stream and self.motas.ready():
+            self.geng_detected = self.motas.predict()
             if self.geng_detected and self.detected_action is not None: # do only once
                 self.detected_action()
                 
@@ -85,7 +88,7 @@ class SINAR:
     
     def main_loop(self, source,
                  streamto: BaseStream = _sentinel_stream, 
-                 frame_preprocessor : Optional[Callable] = None, 
+                 frame_postprocessor : Optional[Callable] = None, 
                  stop_event: Optional[Event] = None):
         """
         Sinar main loop
@@ -118,14 +121,17 @@ class SINAR:
 
             frame = self.predict_frame(frame)
 
-            if frame_preprocessor is not None:
-                frame = frame_preprocessor(frame)
+            if frame_postprocessor is not None:
+                frame = frame_postprocessor(frame)
 
             # write to stream
             is_stop = streamto.write(frame)
             # stop event
             if (stop_event is not None and stop_event.is_set()) or not is_stop:
                 break
+        if not self.live_stream:
+            motas_res = self.motas.predict()
+            logger.info(f"Motion Analysis result: {'GENG MOTOR' if motas_res else 'aman 👌'}")
         # clear tracks
         self._tracks.clear()
         logger.info("tracker stop")

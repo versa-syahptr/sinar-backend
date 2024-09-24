@@ -1,9 +1,11 @@
 import numpy as np
 import pandas as pd
 import cv2
-from typing import Tuple
+from typing import Tuple, Union
 
 from collections import namedtuple
+
+import tensorflow as tf
 
 Process_wrapper = namedtuple("Process_wrapper", "process, stop_event")
 
@@ -53,3 +55,25 @@ def check_stream(stream):
         return False
     cap.release()
     return True
+
+
+def flatten_matrix(m: Union[np.array, tf.Tensor]):
+    """
+    flatten matrix to 1D array, if m is 3D array, flatten each matrix in the batch
+    """
+    if isinstance(m, tf.Tensor):
+        m = m.numpy()
+    
+    if len(m.shape) == 3:
+        batch_flattened = []
+        for matrix in m:
+            batch_flattened.append(flatten_matrix(matrix))
+        return np.array(batch_flattened)
+    else:
+        flattened = []
+        m = m.T # transpose
+        for i in range(0, len(m), 2):
+            for j in range(len(m[i])):
+                flattened.append(m[i][j])
+                flattened.append(m[i+1][j])
+        return np.array(flattened)
