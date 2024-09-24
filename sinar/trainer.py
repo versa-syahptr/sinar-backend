@@ -10,7 +10,7 @@ def train_loop(model: tf.keras.models.Model,
                regenerate_train_ds=False,
                callbacks_list: list = []):
     
-    callbacks_list.append(tf.keras.callbacks.ProgbarLogger(count_mode="steps"))
+    callbacks_list.append(tf.keras.callbacks.ProgbarLogger())
     cb_list = tf.keras.callbacks.CallbackList(callbacks_list)
     cb_list.set_model(model)
     cb_list.on_train_begin()
@@ -20,7 +20,8 @@ def train_loop(model: tf.keras.models.Model,
         print(f"Epoch {e+1}/{epoch}")
 
         # ---------- TRAIN STEP ----------
-        if regenerate_train_ds and e > 0: # only regenerate after the first epoch
+        if regenerate_train_ds: # only regenerate after the first epoch
+            print("Regenerating train dataset")
             train_ds = train_centrogen.regenerate_dataset()
         else:
             train_ds = train_centrogen.dataset
@@ -28,7 +29,7 @@ def train_loop(model: tf.keras.models.Model,
         for i, batch in enumerate(train_ds):
             x, y = batch
             cb_list.on_train_batch_begin(i)
-            train_logs = model.train_on_batch(x, y, reset_metrics=False, return_dict=True)
+            train_logs = model.train_on_batch(x, y,return_dict=True)
             cb_list.on_train_batch_end(i, train_logs)
         epoch_logs.update(train_logs)
 
@@ -39,7 +40,7 @@ def train_loop(model: tf.keras.models.Model,
         for i, batch in enumerate(validation_data):
             x, y = batch
             cb_list.on_test_batch_begin(i)
-            val_logs = model.test_on_batch(x, y, reset_metrics=False, return_dict=True)
+            val_logs = model.test_on_batch(x, y, return_dict=True)
             cb_list.on_test_batch_end(i, val_logs)
         epoch_logs["val_loss"] = val_logs["loss"]
         epoch_logs["val_accuracy"] = val_logs["accuracy"]
