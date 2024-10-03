@@ -12,13 +12,12 @@ import tempfile
 
 from sinar.utils import fill_square, get_xyid, to_dict, flatten_matrix
 
-def generate_augmentation_parameters():
+def generate_augmentation_parameters(max_trans: int = 20, max_angle: int = 30) -> Tuple[bool, float, float, float]:
     # Generate random parameters for flip, translation, and rotation
     do_flip = np.random.rand() > 0.5  # Randomly flip the image
-    max_trans = 20  # Max translation in pixels
     tx = np.random.uniform(-max_trans, max_trans)
     ty = np.random.uniform(-max_trans, max_trans)
-    angle = np.random.uniform(-30, 30)  # Random rotation angle between -30 and 30 degrees
+    angle = np.random.uniform(-max_angle, max_angle)  # Random rotation angle between -30 and 30 degrees
     
     return do_flip, tx, ty, angle
 
@@ -40,15 +39,21 @@ def apply_augmentations(frame, do_flip, tx, ty, angle):
 
 
 class Centrogen:
-    def __init__(self, model_path: str, 
+    def __init__(self, model_path: str,
                  device: str = "cpu", 
-                 do_augmentation: bool = True, 
+                #  do_augmentation: bool = True, 
                  output_shape: tuple = (30, 30),
-                 verbose: bool = False):
+                 verbose: bool = False,
+                 # augmentation params
+                 augment_max_trans: int = None,
+                 augment_max_angle: int = None
+                ):
         
         self.model_path = model_path
         self.device = device
-        self.do_augmentation = do_augmentation
+        self.do_augmentation = augment_max_angle is not None and augment_max_trans is not None
+        self.augment_max_angle = augment_max_angle
+        self.augment_max_trans = augment_max_trans
         self.output_shape = output_shape
         self.verbose = verbose
         self.dataset = None
@@ -70,12 +75,8 @@ class Centrogen:
         yolo = YOLO(self.model_path, task="detect", verbose=self.verbose)
         # augment video
         if self.do_augmentation:
-            flip_code, tx, ty, angle = generate_augmentation_parameters()
+            flip_code, tx, ty, angle = generate_augmentation_parameters(self.augment_max_trans, self.augment_max_angle)
             self._print(f"Augmentation params: flip: {flip_code}, tx: {tx}, ty: {ty}, angle: {angle}")
-
-
-            
-            
             
         cap = cv2.VideoCapture(video_path)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -148,12 +149,12 @@ class Centrogen:
         matrices.set_shape([None, *self.output_shape])
         return matrices
     
+    # parse function for dataset using interleave mapping
     def _parse_function(self, video_path, label):
         matrices = self._create_tensor_matrices(video_path)
-        # Pair each matrix with the label
-        labels = tf.fill([tf.shape(matrices)[0]], label)
-        # labeled_matrices = [(matrix, label) for matrix in matrices]
-        return matrices, labels
+        ds_matrices = tf.data.Dataset.from_tensor_slices(matrices)
+        labels = tf.data.Dataset.from_tensor_slices(tf.fill([tf.shape(matrices)[0]], label))
+        return tf.data.Dataset.zip((ds_matrices, labels))
     
     def flow_from_directory(self, directory: str, batch_size: int = 32, glob = "*.mp4", cache: bool = False):
         directory = os.path.join(directory, glob)
@@ -161,8 +162,13 @@ class Centrogen:
         # map files to labels to create (file_path, label) tuples
         labeled_ds = file_ds.map(self.map_files_to_labels)
         # create matrices from videos and pair them with labels
-        dataset = labeled_ds.map(self._parse_function, num_parallel_calls=tf.data.AUTOTUNE)
-        dataset = dataset.unbatch()
+        # dataset = labeled_ds.map(self._parse_function, num_parallel_calls=tf.data.AUTOTUNE)
+        # dataset = dataset.unbatch()
+
+        # use interleave to make sure the dataset is shuffled properly
+        dataset = labeled_ds.interleave(self._parse_function, 
+                                        cycle_length=tf.data.experimental.AUTOTUNE, block_length=1,
+                                        deterministic=False, num_parallel_calls=tf.data.AUTOTUNE)
         if batch_size is not None:
             dataset = dataset.batch(batch_size)
             self._batch_size = batch_size
@@ -183,8 +189,10 @@ class Centrogen:
         if self.dataset is None:
             raise ValueError("Dataset is not yet created, call flow_from_directory first")
         
+        # unbatch the dataset -> "unzip" the matrices and labels -> zip them -> batch them again
         regenerated_ds = tf.data.Dataset.zip(*map(tf.data.Dataset.from_tensor_slices, map(np.array, 
                                             zip(*self.dataset.unbatch().as_numpy_iterator()))))
+        regenerated_ds = regenerated_ds.shuffle(regenerated_ds.cardinality().numpy())
         regenerated_ds = regenerated_ds.batch(self._batch_size)
         return regenerated_ds
     
