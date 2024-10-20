@@ -80,13 +80,15 @@ def flatten_matrix(m: Union[np.array, tf.Tensor]):
         return np.array(flattened)
 
 
+@tf.keras.utils.register_keras_serializable(package='Sinar')
 class SpecialFlatten(tf.keras.layers.Layer):
     """
     Apply flatten to 2D matrix, if input is 3D array, flatten each matrix in the batch, 
     for usage in keras model
     """
-    def __init__(self):
-        super(SpecialFlatten, self).__init__()
+    def __init__(self, **kwargs):
+        super(SpecialFlatten, self).__init__(**kwargs)
+        self.trainable = False
     
     def _flatten(self, m):
         flattened = []
