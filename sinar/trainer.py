@@ -1,3 +1,6 @@
+import glob
+import os
+import random
 import tensorflow as tf
 
 from sinar.data.centrogen import Centrogen
@@ -10,8 +13,13 @@ def train_loop(model: tf.keras.models.Model,
                regenerate_train_ds=False,
                callbacks_list: list = []):
     
-    callbacks_list.append(tf.keras.callbacks.ProgbarLogger())
-    cb_list = tf.keras.callbacks.CallbackList(callbacks_list)
+    # callbacks_list.append(tf.keras.callbacks.ProgbarLogger())
+    cb_list = tf.keras.callbacks.CallbackList(callbacks_list, 
+                                              model=model,
+                                              epochs=epoch,
+                                              verbose=1,
+                                              add_progbar=True,
+                                              add_history=True)
     cb_list.set_model(model)
     cb_list.on_train_begin()
     for e in range(epoch):

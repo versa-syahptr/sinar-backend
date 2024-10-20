@@ -6,6 +6,7 @@ from typing import Tuple, Union
 from collections import namedtuple
 
 import tensorflow as tf
+from keras import ops
 
 Process_wrapper = namedtuple("Process_wrapper", "process, stop_event")
 
@@ -77,3 +78,33 @@ def flatten_matrix(m: Union[np.array, tf.Tensor]):
                 flattened.append(m[i][j])
                 flattened.append(m[i+1][j])
         return np.array(flattened)
+
+
+class SpecialFlatten(tf.keras.layers.Layer):
+    """
+    Apply flatten to 2D matrix, if input is 3D array, flatten each matrix in the batch, 
+    for usage in keras model
+    """
+    def __init__(self):
+        super(SpecialFlatten, self).__init__()
+    
+    def _flatten(self, m):
+        flattened = []
+        m = ops.transpose(m)
+        for i in range(0, len(m), 2):
+            for j in range(len(m[i])):
+                flattened.append(m[i, j])
+                flattened.append(m[i+1, j])
+        return ops.array(flattened, dtype=m.dtype)
+
+    def call(self, inputs):
+        if len(inputs.shape) == 3:
+            batch_flattened = []
+            for i in range(inputs.shape[0]):
+                batch_flattened.append(self._flatten(inputs[i]))
+            return ops.stack(batch_flattened, axis=0)
+        else:
+            return self._flatten(inputs)
+    
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[1] * input_shape[2])
