@@ -93,16 +93,18 @@ class SpecialFlatten(tf.keras.layers.Layer):
     def _flatten(self, m):
         flattened = []
         m = ops.transpose(m)
-        for i in range(0, len(m), 2):
-            for j in range(len(m[i])):
+        for i in range(0, ops.shape(m)[0], 2):
+            for j in range(ops.shape(m)[1]):
                 flattened.append(m[i, j])
                 flattened.append(m[i+1, j])
-        return ops.array(flattened, dtype=m.dtype)
+        return ops.stack(flattened)
 
     def call(self, inputs):
+        input_shape = tf.shape(inputs)
         if len(inputs.shape) == 3:
+            batch_size = input_shape[0]
             batch_flattened = []
-            for i in range(inputs.shape[0]):
+            for i in range(batch_size):
                 batch_flattened.append(self._flatten(inputs[i]))
             return ops.stack(batch_flattened, axis=0)
         else:
