@@ -2,6 +2,13 @@
 **_Sistem Inteligen Anti Kejahatan Jalan Raya_**
 
 ---
+### Implementation of Paper:
+
+**Detecting Motorcycle Crime Gangs in CCTV Video Footage Using YOLOv9 and CNN**
+
+At Proceeding of The 4th International Conference on Intelligent Cybernetics Technology & Applications 2024 (ICICyTA 2024)
+
+---
 
 ## Instalation
 
