@@ -42,6 +42,7 @@ class SINAR:
         self.motas = Motas(motas_model, live_stream=live_stream)
         self.geng_detected = False
         self.detected_action : Optional[Callable] = None
+        self.gang_detected_text = "ADA GENG MOTOR"
     
     def register_detected_action(self, action: Callable):
         self.detected_action = action
@@ -76,7 +77,7 @@ class SINAR:
                 
         # do as long as pred is true
         if self.geng_detected:
-            frame = cvtext(frame, "ADA GENG MOTOR")
+            frame = cvtext(frame, self.gang_detected_text)
 
         return frame
     
@@ -115,6 +116,7 @@ class SINAR:
         logger.info(f"tracker start ({source})")
         # for result in result_generator:
         while True:
+            start_time = time.time()
             ret, frame = capture.read()
             if not ret:
                 break

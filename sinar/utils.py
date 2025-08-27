@@ -42,11 +42,12 @@ def make_dataframe(centroids: list):
 
 def cvtext(frame, text):
     font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 1.5
-    text_color = (0,0, 255)  # White color
-    text_thickness = 3
+    # dynamically set font scale based on frame shape
+    font_scale = min(frame.shape[0], frame.shape[1]) / 500
+    text_color = (0, 0, 255)  # red color
+    text_thickness = 2
     # set text position in the middle of the frame
-    text_position = (int((frame.shape[1] - len(text) * 20) / 2), int(frame.shape[0] / 2))
+    text_position = (int((frame.shape[1] - len(text) * 20 * font_scale) / 2), int(frame.shape[0] / 4))
     cv2.putText(frame, text, text_position, font, font_scale, text_color, text_thickness)
     return frame
 

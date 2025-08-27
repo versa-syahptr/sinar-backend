@@ -161,9 +161,6 @@ class Centrogen:
         file_ds = tf.data.Dataset.list_files(directory)
         # map files to labels to create (file_path, label) tuples
         labeled_ds = file_ds.map(self.map_files_to_labels)
-        # create matrices from videos and pair them with labels
-        # dataset = labeled_ds.map(self._parse_function, num_parallel_calls=tf.data.AUTOTUNE)
-        # dataset = dataset.unbatch()
 
         # use interleave to make sure the dataset is shuffled properly
         dataset = labeled_ds.interleave(self._parse_function, 

@@ -9,7 +9,19 @@ YTSTREAM = RTMP_URL + os.environ.get("SINAR_YT_KEY", '')
 
 class BaseStream:
     def __init__(self) -> None:
-        pass
+        self.width = 0
+        self.height = 0
+        self.fps = 0
+    
+    def set_video_info(self, w, h, fr):
+        self.width = w
+        self.height = h
+        self.fps = fr
+    
+    def validate_video_info(self) -> bool:
+        if self.width == 0 or self.height == 0 or self.fps == 0:
+            raise ValueError("Video info not set, call set_video_info first")
+
     def start(self, output : str):
         pass
     def write(self, frame: np.ndarray) -> bool:
@@ -73,7 +85,7 @@ class Viewer(BaseStream):
         self.title = title
         self.stop_key = stop_key
 
-    def write(self, frame: np.ndarray) -> bool:
+    def write(self, frame: np.ndarray, delay_ms=10) -> bool:
         """
         Write frame to the viewer
         
@@ -84,7 +96,7 @@ class Viewer(BaseStream):
             bool: True if the viewer is still running, False otherwise
         """
         cv2.imshow(self.title, frame)
-        if cv2.waitKey(1) & 0xFF == ord(self.stop_key):
+        if cv2.waitKey(delay_ms) & 0xFF == ord(self.stop_key):
             return False
         return True
     def stop(self):
@@ -106,7 +118,7 @@ class Saver(Viewer):
         """
         super().__init__(title)
         self.output = output
-        self.writer = cv2.VideoWriter(output, cv2.VideoWriter_fourcc(*'MP4V'), fps, (w, h))
+        self.writer = cv2.VideoWriter(output, -1, fps, (w, h))
 
     def write(self, frame: np.ndarray):
         self.writer.write(frame)
