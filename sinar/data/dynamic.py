@@ -10,12 +10,21 @@ from torch.utils.data import Dataset, DataLoader, Sampler
 from ultralytics import YOLO
 
 class CentroidMatrixDataset(Dataset):
-    def __init__(self, model_path: str, data=None):
+    def __init__(self, model_path: str, *, data: dict = None, meta: list = None):
         if model_path is not None:
             self.yolo = YOLO(model_path, task="detect")
         # Group data by their last dimension
-        self.grouped_data = data if data is not None else defaultdict(list)
-        self.grouped_list = []
+        if data is None:
+            self.grouped_data = defaultdict(list)
+            self.metadata = []
+        else:
+            if meta is not None: # contains metadata
+                self.grouped_data = data
+                self.metadata = meta
+            else:
+                self.grouped_data = data
+
+        self.grouped_list = [] # indices
         self._rebuild_index()
 
     def _rebuild_index(self):
@@ -30,7 +39,7 @@ class CentroidMatrixDataset(Dataset):
 
     def __getitem__(self, idx):
         group_key, item_idx = self.grouped_list[idx]
-        matrix, label = self.grouped_data[group_key][item_idx]
+        matrix, label, _ = self.grouped_data[group_key][item_idx]
         return matrix, label
 
     def create_matrices_from_videos(self, video_path: str, label: int):
@@ -70,6 +79,11 @@ class CentroidMatrixDataset(Dataset):
             if start_frame + (30 - 1) * 5 >= total_frames:
                 break
 
+        # metadata record
+        fname = os.path.basename(video_path)
+        self.metadata.append(fname)
+        meta_idx = len(self.metadata) - 1
+        print(f"adding {fname} to metadata {meta_idx}")
 
         # Group matrices by their last dimension (jumlah motor x2)
         for matrix in matrices:
@@ -81,9 +95,8 @@ class CentroidMatrixDataset(Dataset):
             matrix = matrix.reshape(1, -1, matrix.shape[-1])
             # convert to torch tensor
             matrix = torch.from_numpy(matrix)
-            # label = torch.tensor(label)
-            # add to group
-            self.grouped_data[matrix.shape[-1]].append((matrix, label))
+            # add to group (matrix, label, file_idx)
+            self.grouped_data[matrix.shape[-1]].append((matrix, label, meta_idx))
 
         self._rebuild_index()
 
@@ -103,12 +116,28 @@ class CentroidMatrixDataset(Dataset):
         if not self.grouped_data:
             raise ValueError("No data available to save.")
 
-        torch.save(dict(self.grouped_data), path)
+        raw_data = {
+            "data": dict(self.grouped_data),
+            "metadata": self.metadata
+        }
+
+        torch.save(raw_data, path)
 
     @classmethod
-    def load(cls, path: str):
-        data = torch.load(path)
-        return cls(model_path=None, data=data)
+    def load(cls, path: str, *, include_meta=False):
+        data = torch.load(path) # raw data may contain meta (dict[str, Union[dict, list]])
+        if include_meta:
+            if "metadata" not in data:
+                raise ValueError("Metadata not found in the loaded data. please load without meta")
+            return cls(model_path=None, data=data["data"], meta=data["metadata"])
+        else:
+          # cleanup metadata if any
+            if "metadata" in data:
+                del data["metadata"]
+                data = data["data"]
+                # cleanup metadata pointer
+                # data = { k: [(matrix, label) for (matrix, label, _) in v] for k, v in data.items()}
+            return cls(model_path=None, data=data)
 
 
 # dummy random dataset class for CentroidMatrixDataset
