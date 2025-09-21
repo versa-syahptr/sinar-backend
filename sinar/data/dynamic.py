@@ -5,16 +5,30 @@ from typing import Union
 import cv2
 import pandas as pd
 import torch
-from sinar.utils import get_xyid, to_dict
+from sinar.utils import fill_square, get_xyid, to_dict
 from torch.utils.data import Dataset, DataLoader, Sampler
 from ultralytics import YOLO
 
 class CentroidMatrixDataset(Dataset):
+    """
+    A PyTorch version of `sinar.data.centrogen.Centrogen` data structure.
+    Stores data in grouped format based on the last dimension of the matrices.
+    This allows for generating dynamic matrices of varying sizes in a single dataset,
+    compared to Tensorflow's fixed-size tensors in `Centrogen`.
+    Each entry in the dataset is a tuple of (matrix, label).
+    This class also supports fixed-size matrices by calling `make_static`.
+
+    Example usage:
+        dataset = CentroidMatrixDataset(model_path="path/to/yolo/model")
+        dataset.create_from_directory("path/to/videos")
+        dataset.make_static(shape=30)  # Optional: make all matrices 30x30
+        dataloader = DataLoader(dataset, batch_size=16, sampler=GroupedBatchSampler(dataset, batch_size=16))
+    """
     def __init__(self, model_path: str, *, data: dict = None, meta: list = None):
         if model_path is not None:
             self.yolo = YOLO(model_path, task="detect")
         # Group data by their last dimension
-        if data is None:
+        if data is None: # empty dataset
             self.grouped_data = defaultdict(list)
             self.metadata = []
         else:
@@ -110,6 +124,18 @@ class CentroidMatrixDataset(Dataset):
             label = 1 if "gang" in fname.lower() else 0
             print(f"Processing {fname} with label {label}")
             self.create_matrices_from_videos(os.path.join(dir_path, fname), label)
+    
+    def make_static(self, shape=30):
+        raw_static_data = {shape : []}
+        print(f"Trimming matrices to 30x{shape}")
+        for k, v in self.grouped_data.items():
+            for matrix, label, file_id in v:
+                trimmed_matrix = fill_square(matrix[0].numpy(), shape)
+                # turn trimmed_matrix back to tensor and add channel dim
+                trimmed_matrix = torch.from_numpy(trimmed_matrix).unsqueeze(0)
+                raw_static_data[shape].append((trimmed_matrix, label, file_id))
+        self.grouped_data = raw_static_data
+        self._rebuild_index()
 
     def save(self, path: str):
         # make sure the data was generated
