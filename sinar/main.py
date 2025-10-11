@@ -38,7 +38,7 @@ def handle_train(args):
 
 def handle_predict(args):
     print(f"Predicting with model: {args.yolo}, analysis behavior: {args.anbev}, device: {args.device}, input: {args.input}, output: {args.output}, view: {args.view}")
-    sinar = SINAR(args.yolo, args.anbev, device=args.device)
+    sinar = SINAR(args.yolo, args.anbev, live_stream=args.live, device=args.device)
     if args.output:
         vi = VideoInfo(args.input)
         streamer = stream.Saver(vi.width, vi.height, vi.fps, output=args.output)
@@ -104,6 +104,7 @@ def main():
     parser_predict.add_argument("-i", "--input", type=str, required=True, help="source of video")
     parser_predict.add_argument("-o", "--output", type=str, default=None, help="output file")
     parser_predict.add_argument("-v", "--view", action="store_true", help="show the result")
+    parser_predict.add_argument("-l", "--live", action="store_true", help="enable live stream, disable the greedy algorithm")
     parser_predict.set_defaults(func=handle_predict)
 
     # Service subcommand

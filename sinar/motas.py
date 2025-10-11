@@ -1,10 +1,13 @@
 # imports
 import numpy as np
 import pandas as pd
-import tensorflow as tf
-import pickle
+from ultralytics.engine.results import Results
+from typing import Optional, Union, Callable, Literal
+# import tensorflow as tf
+# import pickle
 
 from sinar.utils import get_xyid, to_dict, fill_square, make_dataframe, flatten_matrix
+from sinar.models import BaseClassifierModel
 from sinar.logger import logger
 # from notification_service import send_alert_notification
 
@@ -13,20 +16,11 @@ from sinar.logger import logger
 # 
 class Motas():
     """Motion Analysis class for detecting geng motor"""
-    def __init__(self, model, live_stream = False, **kwargs) -> None:
+    def __init__(self, model: str, live_stream = False, **kwargs) -> None:
         self.name = "Anbev"
         self.live_stream = live_stream
 
-        if model.endswith(".h5") or model.endswith(".keras"):
-            logger.info(f"Loading Tensorflow model {model}")
-            with tf.device("CPU"): # type: ignore
-                self.model = tf.keras.models.load_model(model)
-            self.use_flatten = False
-        else:
-            logger.info(f"Loading pickle model {model}")
-            with open(model, "rb") as f:
-                self.model = pickle.load(f)
-            self.use_flatten = True
+        self.model = BaseClassifierModel.load(model)
 
         logger.info(f"Motion Analysis model loaded with type <{self.model.__class__.__name__}>")
 
@@ -50,18 +44,14 @@ class Motas():
         self.idx_frame = 0
         df = make_dataframe(self.centroids)
         # PREDICT
-        x = fill_square(df.values, self.size)
+        # x = fill_square(df.values, self.size)
+        x = df.values.astype(np.float32)
+        logger.info(f"shape: {x.shape}")
+        # ensure x shape is (1, 30, N)
+        x = np.expand_dims(x, axis=0)
 
         logger.info("Motion Analysis predicting on demand")
-        if self.use_flatten:
-            x = flatten_matrix(x)
-            x = np.expand_dims(x, axis=0)
-            pred = self.model.predict(x).round().astype(int)[0]
-
-        else:
-            x = np.expand_dims(x, axis=0)
-            with tf.device("CPU"): # type: ignore
-                pred = self.model(x).numpy().round().astype(int)[0,0]
+        pred = self.model.predict(x)[0]
         logger.info(f"preds result: {'GENG MOTOR' if pred else 'aman 👌'}")
 
         return pred
@@ -79,27 +69,30 @@ class Motas():
                     matrix.append(self.centroids[frame_idx])
                 df = pd.DataFrame(matrix)
                 df.fillna(0, inplace=True)
-                matrix = fill_square(df.values, self.size)
-                matrices.append(matrix)
-            if start_frame + (self.size - 1) * self.sampling >= len(self.centroids):
+                # matrix = fill_square(df.values, self.size)
+                matrices.append(df.values)
+            if start_frame + (self.size - 1) * self.sampling >= len(self.centroids): # type: ignore
                 break
-
+        logger.info(f"total matrices: {len(matrices)}")
+        logger.info(f"matrices shape: {[m.shape for m in matrices]}")
+        # TODO: this line still causes issue if matrices have different shape
+        # e.g. (30, 20), (30, 25), (30, 30)
+        # need find solution for this
+        # either process each matrix one by one
+        # or pad the smaller matrix to the largest shape
+        # for now, just use `predict_on_demand` instead of this function (the live_stream mode)
         x = np.array(matrices, dtype=np.float32)
         logger.info("Motion Analysis predicting in batch")
         logger.info(f"shape: {x.shape}")
 
-        if self.use_flatten:
-            x = flatten_matrix(x)
-            preds = self.model.predict(x)
-        else:
-            preds = self.model(x).numpy().round()
+        preds = self.model.predict(x)
         
         logger.info(f"preds result: {preds}")
         logger.info(f"preds mean: {preds.mean()}")
         return preds.mean().round().astype(int)
 
     
-    def put_result(self, result):
+    def put_result(self, result: Results):
         if (self.idx_frame == 0 or self.idx_frame%self.sampling == 0) and len(self.centroids) < self.size:
             if result.boxes.id is None:
                 self.centroids.append(dict()) # put empty row

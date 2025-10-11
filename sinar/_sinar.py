@@ -29,6 +29,7 @@ class SINAR:
     def __init__(self, yolo_model, motas_model, 
                  live_stream: bool = False,
                  device: Optional[Union[int, Literal["cpu"]]]=0):
+        logger.info(f"Initializing SINAR {'live' if live_stream else 'greedy'} mode")
         self.yolo_model = YOLO(yolo_model, task="detect")
         # self.yolo_model.to(0)
         self.device = device
@@ -154,7 +155,7 @@ class SINAR:
                 x, y, w, h = xyxy2xywh(box)
                 tracks = self._tracks[track_id]
                 tracks.append((x, y))
-                annotator.draw_centroid_and_tracks(tracks, color=colors(int(track_id)))
+                # annotator.draw_centroid_and_tracks(tracks, color=colors(int(track_id)))
         return annotator.result()
     
     # async def predict_from_websocket(self, ws: WebSocket, 
