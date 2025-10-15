@@ -1,12 +1,12 @@
 from multiprocessing import Event, Process
 from supervision.video.dataclasses import VideoInfo
 
-from sinar._sinar import SINAR
+from sinar.core import SINAR
 from sinar.stream import RTMPStream
 from sinar.utils import Process_wrapper
-from sinar.logger import logger
+import sinar.logger
 
-# logger = log_module.get(__name__)
+logger = sinar.logger.get(__name__)
 
 __all__ = ["new_sinar_process", "stop_process", "stop_all_processes", "any_process_alive", "SINAR"]
 

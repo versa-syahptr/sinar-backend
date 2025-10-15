@@ -1,12 +1,17 @@
+from typing import Union
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, models # type: ignore
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import pickle
 from abc import ABC, abstractmethod
 
+import sinar.logger
 from sinar.utils import flatten_matrix, fill_square
+
+logger = sinar.logger.get(__name__)
 
 def create_input_layers():
     inp = layers.Input(shape=(30, 30), name="sinar_input") # 30x30 input
@@ -83,13 +88,21 @@ class BaseClassifierModel(ABC):
         pass
 
     @staticmethod
-    def presquare(x):
-        if len(x.shape) == 3: # batch of matrices
+    def presquare(x: Union[np.ndarray, list]):
+        if (isinstance(x, np.ndarray) and len(x.shape) == 3) or isinstance(x, list): # batch of matrices
             x = np.array([fill_square(xi) for xi in x])
         else:
             x = fill_square(x) # single matrix
             x = np.expand_dims(x, axis=0) # add batch dim
         return x
+    
+    def predict_batch(self, x):
+        # implement in subclass if needed
+        # alias for predict
+        # x is a list of matrices, convert to numpy array
+        x = self.presquare(x)
+        x = np.array(x, dtype=np.float32)
+        return self.predict(x).flatten()
 
     # factory method
     @classmethod
@@ -121,7 +134,7 @@ class TFClassifierModel(BaseClassifierModel):
         return self.model.predict(x)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path, *args, **kwargs):
         model = tf.keras.models.load_model(path)
         return cls(model)
     
@@ -143,8 +156,16 @@ class TorchClassifierModel(BaseClassifierModel, nn.Module):
     """
     def __init__(self, device="cpu"):
         super().__init__()
-        self.device = device
-        self.to(device)
+        # validate device
+        if isinstance(device, int):
+            self.device = torch.device(f"cuda:{device}" if torch.cuda.is_available() else "cpu")
+        elif isinstance(device, str):
+            try:
+                self.device = torch.device(device)
+            except Exception as e:
+                logger.error(f"Invalid device string: {device} falling back to cpu")
+                self.device = torch.device("cpu")
+        self.to(self.device)
         self.conv1 = nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=(1,2), stride=(1,2), padding=(0,0)),
             nn.ReLU(inplace=True)
@@ -174,17 +195,32 @@ class TorchClassifierModel(BaseClassifierModel, nn.Module):
         self.eval()
         with torch.no_grad():
             x = torch.from_numpy(x).float()
+            # ensure x shape is (N, 1, 30, M)
             if len(x.shape) == 3:
                 x = x.unsqueeze(1) # add channel dim
-            preds = self.forward(x).numpy() # this will be logits
-            preds = np.argmax(preds, axis=1) # convert to class labels
-        return preds
+            elif len(x.shape) == 2:
+                x = x.unsqueeze(0).unsqueeze(0) # add batch and channel dim
+            x = x.to(self.device)
+            logits = self.forward(x) # this will be logits
+            probs = torch.softmax(logits, dim=1).cpu().numpy()
+
+        return probs[:, 1] # return positive class probability
+    
+    def predict_batch(self, x):
+        # x is a list of matrices
+        # process one by one to avoid memory issue
+        results = []
+        for xi in x:
+            preds = self.predict(xi)
+            results.extend(preds)
+        return np.array(results)
+        
     
     @classmethod
-    def load(cls, path, device="cpu"):
+    def load(cls, path, device="cpu", *args, **kwargs):
         model = cls(device=device)
-        model.load_state_dict(torch.load(path, map_location=device))
-        model.to(device)
+        model.load_state_dict(torch.load(path, map_location=model.device))
+        # model.to(device)
         model.eval()
         return model
     
@@ -207,7 +243,7 @@ class ClassicMLModel(BaseClassifierModel):
         return self.model.predict(x)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path, *args, **kwargs):
         with open(path, "rb") as f:
             model = pickle.load(f)
         return cls(model)
@@ -238,7 +274,7 @@ class OVClassifierModel(BaseClassifierModel):
         return self.model.predict(x)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path, *args, **kwargs):
         import openvino as ov
         core = ov.Core()
         model = core.read_model(model=path)

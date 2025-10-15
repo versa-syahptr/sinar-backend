@@ -1,9 +1,11 @@
 from pathlib import Path
 import subprocess
 import sys
-from sinar.logger import logger
-
 from ultralytics import YOLO
+
+import sinar.logger
+
+logger = sinar.logger.get(__name__)
 
 def check_ffmpeg() -> bool:
     try:

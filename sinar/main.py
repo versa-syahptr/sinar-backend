@@ -7,9 +7,9 @@ from supervision.video.dataclasses import VideoInfo
 from sinar.data import annotator, viewer
 from sinar import SINAR
 from sinar import stream
+from sinar.logger import set_level
 
-
-DESCRIPTION = "SINAR: "
+DESCRIPTION = "SINAR: Sistem Inteligen Anti Kejahatan Jalan Raya"
 
 
 def annotator_dry_run(args):
@@ -40,7 +40,7 @@ def handle_predict(args):
     print(f"Predicting with model: {args.yolo}, analysis behavior: {args.anbev}, device: {args.device}, input: {args.input}, output: {args.output}, view: {args.view}")
     sinar = SINAR(args.yolo, args.anbev, live_stream=args.live, device=args.device)
     if args.output:
-        vi = VideoInfo(args.input)
+        vi = VideoInfo.from_video_path(args.input)
         streamer = stream.Saver(vi.width, vi.height, vi.fps, output=args.output)
     elif args.view:
         streamer = stream.Viewer(args.input)
@@ -65,9 +65,15 @@ def handle_service(args):
     )
 
 def main():
-    parser = argparse.ArgumentParser(prog='sinar', )
-    subparsers = parser.add_subparsers(title='commands', dest='command')
+    parser = argparse.ArgumentParser(prog='sinar', description=DESCRIPTION)
+    parser.add_argument(
+        "-L", "--log-level",
+        choices=["trace", "debug", "info", "warning", "error", "critical"],
+        default="info",
+        help="Set SINAR framework log level (default: info)"
+    )
 
+    subparsers = parser.add_subparsers(title='commands', dest='command')
 
     # Data subcommand
     parser_data = subparsers.add_parser('data', help='Handle data operations (internal use only)')
@@ -114,6 +120,9 @@ def main():
 
     # Parse arguments and call the appropriate function
     args = parser.parse_args()
+
+    set_level(args.log_level)
+
     if args.command:
         if args.command == 'data' and not args.data_command:
             parser_data.print_help()

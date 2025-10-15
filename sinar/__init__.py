@@ -1,1 +1,1 @@
-from sinar._sinar import SINAR
+from sinar.core import SINAR

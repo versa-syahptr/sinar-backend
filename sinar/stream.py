@@ -3,6 +3,11 @@ import numpy as np
 import os
 import cv2
 
+from sinar.utils import VideoInfo
+from sinar.logger import get
+
+logger = get(__name__)
+
 
 RTMP_URL="rtmp://a.rtmp.youtube.com/live2/"
 YTSTREAM = RTMP_URL + os.environ.get("SINAR_YT_KEY", '')
@@ -21,11 +26,14 @@ class BaseStream:
     def validate_video_info(self) -> bool:
         if self.width == 0 or self.height == 0 or self.fps == 0:
             raise ValueError("Video info not set, call set_video_info first")
+    
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
 
     def start(self, output : str):
         pass
     def write(self, frame: np.ndarray) -> bool:
-        pass
+        return True # make sure the stream is still running, even if not implemented
     def stop(self):
         pass
 
@@ -53,16 +61,19 @@ class RTMPStream(BaseStream):
             # Omit output
         ]
         self.proc = None
+
     def start(self, output):
         self.cmd.append(output)
         self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, 
                                      stdout=subprocess.DEVNULL, 
                                      stderr=subprocess.DEVNULL)
         return self
+    
     def write(self, frame: np.ndarray):
         if self.proc is None:
             raise Exception("Stream not started")
         self.proc.stdin.write(frame.tobytes())
+
     def stop(self):
         if self.proc is None:
             return
@@ -95,16 +106,18 @@ class Viewer(BaseStream):
         Returns: 
             bool: True if the viewer is still running, False otherwise
         """
-        cv2.imshow(self.title, frame)
+        title = f"{self.title} [press '{self.stop_key}' to stop]"
+        cv2.imshow(title, frame)
         if cv2.waitKey(delay_ms) & 0xFF == ord(self.stop_key):
             return False
         return True
+    
     def stop(self):
         return cv2.destroyAllWindows()
     
 
-class Saver(Viewer):
-    def __init__(self,  w, h, fps, title="result", output="output.mp4"):
+class Saver(BaseStream): # attach directly to BaseStream instead of Viewer to avoid opening a window
+    def __init__(self, video_info: VideoInfo, output="output.mp4"):
         """
         Saver class to save the result to a file
 
@@ -116,9 +129,10 @@ class Saver(Viewer):
             output (str, optional): output file. Defaults to "output.mp4".
         
         """
-        super().__init__(title)
+        super().__init__()
         self.output = output
-        self.writer = cv2.VideoWriter(output, -1, fps, (w, h))
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        self.writer = cv2.VideoWriter(output, fourcc, video_info.fps, (video_info.width, video_info.height))
 
     def write(self, frame: np.ndarray):
         self.writer.write(frame)
@@ -127,3 +141,38 @@ class Saver(Viewer):
     def stop(self):
         self.writer.release()
         return super().stop()
+    
+    def __repr__(self):
+        return f"{self.__class__.__name__} to {self.output}"
+
+
+class MultiStream(BaseStream):
+    def __init__(self, streams: list[BaseStream]):
+        logger.info(f"Using MultiStream for {[x for x in streams]}")
+        self.streams = streams
+        super().__init__()
+    
+    def set_video_info(self, w, h, fr):
+        for s in self.streams:
+            s.set_video_info(w, h, fr)
+        return super().set_video_info(w, h, fr)
+    
+    def validate_video_info(self) -> bool:
+        return super().validate_video_info()
+    
+    def write(self, frame: np.ndarray):
+        for s in self.streams:
+            if not s.write(frame):
+                return False
+        return True
+    
+    def start(self, output: str):
+        for s in self.streams:
+            s.start(output)
+        return self
+    
+    def stop(self):
+        for s in self.streams:
+            s.stop()
+        return super().stop()
+    

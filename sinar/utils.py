@@ -1,7 +1,8 @@
+from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 import cv2
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 from collections import namedtuple
 
@@ -113,3 +114,50 @@ class SpecialFlatten(tf.keras.layers.Layer):
     
     def compute_output_shape(self, input_shape):
         return (input_shape[0], input_shape[1] * input_shape[2])
+    
+
+@dataclass
+class VideoInfo:
+    """
+    Data class containing information about the video resolution, fps, and total frame count.
+
+    :param width: int : The width of the video frames in pixels.
+    :param height: int : The height of the video frames in pixels.
+    :param fps: int : The frames per second of the video.
+    :param total_frames: int : The total number of frames in the video.
+    """
+
+    width: int
+    height: int
+    fps: int
+    total_frames: Optional[int] = None
+
+    @classmethod
+    def from_video_path(cls, video_path: str):
+        """
+        Returns a VideoInfo data class containing information about the video resolution, fps, and total frame count.
+
+        :param video_path: str : The path of the video file.
+        :return: VideoInfo : A data class containing information about the video resolution, fps, and total frame count.
+        """
+        video = cv2.VideoCapture(video_path)
+        if not video.isOpened():
+            raise Exception(f"Could not open video at {video_path}")
+
+        width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = int(video.get(cv2.CAP_PROP_FPS))
+        total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+        video.release()
+        return VideoInfo(width, height, fps, total_frames)
+
+    @property
+    def resolution(self) -> Tuple[int, int]:
+        return self.width, self.height
+    
+    @property
+    def duration(self) -> Optional[float]:
+        if self.fps and self.total_frames:
+            return self.total_frames / self.fps
+        return None
+
