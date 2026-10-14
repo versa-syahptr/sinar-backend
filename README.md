@@ -207,7 +207,7 @@ Re-run on 2026-10-14 (Intel i5-1235U, Iris Xe iGPU through OpenVINO, about 2.8×
 | `normal-1.004` | 0.023 | normal ✔ |
 | `normal-5.003` | 0.000 | normal ✔ |
 
-Because of [Known Issues](#known-issues) #2, the on-screen `ADA GENG MOTOR` text in live mode doesn't reflect these probabilities yet.
+In live mode each window is logged as `preds result: GENG MOTOR (p=0.997)` / `aman 👌 (p=0.387)`.
 
 ---
 
@@ -257,7 +257,7 @@ sinar predict -y YOLO -a ANBEV -i INPUT [-d DEVICE] [-o OUTPUT] [-v] [-l]
 | `-v, --view` | | off | Show the annotated video in a window. Press `q` to stop. |
 | `-l, --live` | | off | Live mode: classify every 30 sampled frames while the video plays (see below). |
 
-> See [Known Issues](#known-issues) #1–#3 before relying on `-o`, `-l` or greedy-mode results.
+> See [Known Issues](#known-issues) #1 and #2 before relying on `-o` or greedy-mode results.
 
 `-o` and `-v` can't be combined: if `-o` is given, the result is saved and no window is shown. With neither option, the video is only processed and the result is logged.
 
@@ -266,9 +266,9 @@ sinar predict -y YOLO -a ANBEV -i INPUT [-d DEVICE] [-o OUTPUT] [-v] [-l]
 | Mode | Flag | Behaviour | Output |
 |---|---|---|---|
 | **Greedy** (default) | | Intended for **recorded video files**: collects centroids while the video plays and classifies once at the end. | The final verdict is logged: `Motion Analysis result: GENG MOTOR` or `aman 👌` |
-| **Live** | `-l` | Intended for **live streams** (public CCTV `.m3u8`, `rtmp://`) that never end: classifies every time 30 samples (≈150 frames, 5 s at 30 fps) are collected, then starts a new window. It also works on files, and the paper's results were produced that way. | `ADA GENG MOTOR` is drawn on the frames once a gang is detected |
+| **Live** | `-l` | Intended for **live streams** (public CCTV `.m3u8`, `rtmp://`) that never end: classifies every time 30 samples (≈150 frames, 5 s at 30 fps) are collected, then starts a new window. It also works on files, and the paper's results were produced that way. | each window is logged as `preds result: GENG MOTOR (p=…)` or `aman 👌 (p=…)`. `ADA GENG MOTOR` is drawn on the frames while the latest window's verdict is gang |
 
-> **Live stream → RTMP output.** `sinar predict` can only show (`-v`) or save (`-o`) the result. Streaming the annotated video back out to an RTMP server (nginx-rtmp, see `nginx-rtmp.conf`) is done by the root `main.py` script (multi-stream, one process per source, e.g. `helper.sh`) and by `sinar service` `/start-tracker`. Both currently fail, see [Known Issues](#known-issues) #5 and #6:
+> **Live stream → RTMP output.** `sinar predict` can only show (`-v`) or save (`-o`) the result. Streaming the annotated video back out to an RTMP server (nginx-rtmp, see `nginx-rtmp.conf`) is done by the root `main.py` script (multi-stream, one process per source, e.g. `helper.sh`) and by `sinar service` `/start-tracker`. Both currently fail, see [Known Issues](#known-issues) #4 and #5:
 >
 > ```bash
 > $ python main.py -y best.pt -a classifier.keras \
@@ -405,13 +405,12 @@ Found by code review and not fixed yet. The CLI reference above describes the in
 | # | Affects | Problem |
 |---|---|---|
 | 1 | `predict -o` | Crashes with a `TypeError`: `sinar/main.py` calls `stream.Saver(width, height, fps, ...)`, but `Saver` now takes a `VideoInfo`. **Workaround:** use the [library API](#using-sinar-as-a-library). |
-| 2 | `predict -l` | Once the first 30 samples are classified, `ADA GENG MOTOR` stays on screen no matter what the result was: `core.py` stores the whole `MotasResult` object (always truthy) instead of `.is_gang`. The `preds result: GENG MOTOR` log line is wrong too: `Motas.predict_on_demand` checks whether the probability array is non-zero instead of comparing it with the threshold. Use `-L debug` and read the probabilities, or the returned `MotasResult.is_gang`. |
-| 3 | `predict` (greedy mode) | Only the first 30 samples (≈5 s of video) are collected, and `predict_batch` subsamples them by 5 again, so each of the 5 classified matrices has only ~6 real rows and the rest zeros. Results on longer videos are unreliable. |
-| 4 | `predict -d` with a `.pth` classifier | `TorchClassifierModel` moves itself to the device before its layers are created, so the weights stay on the CPU. A CUDA device causes a device mismatch error. |
-| 5 | stream input | If the source can't be opened, `main_loop` retries forever without re-opening it. |
-| 6 | live streaming to RTMP (`main.py`, `service`) | `RTMPStream.write()` returns `None`, which the main loop treats as "stop", so streaming ends after one frame. In addition, `SINAR.__call__` passes positional arguments to the keyword-only `main_loop`, and both the root `main.py` and `server.py` call `sinar.new_sinar_process` (and `main.py` also `sinar.any_process_alive` / `stop_all_processes`), which aren't exported from the `sinar` package (they live in `sinar.service`). So neither `main.py` nor `/start-tracker` can stream right now. |
-| 7 | `data annotate` | `-v/--video-path` isn't marked as required, but the command fails without it. |
-| 8 | old `.keras` classifiers | `.keras` files saved with Keras 2.x (TensorFlow ≤ 2.15, e.g. `anbev-cnn-v2.keras`, `sinar_vgg16.keras`) can't be loaded by Keras 3. Files saved with Keras 3 (e.g. `yolov9m-CNN512.keras`) and legacy `.h5` files work. |
+| 2 | `predict` (greedy mode) | Only the first 30 samples (≈5 s of video) are collected, and `predict_batch` subsamples them by 5 again, so each of the 5 classified matrices has only ~6 real rows and the rest zeros. Results on longer videos are unreliable. |
+| 3 | `predict -d` with a `.pth` classifier | `TorchClassifierModel` moves itself to the device before its layers are created, so the weights stay on the CPU. A CUDA device causes a device mismatch error. |
+| 4 | stream input | If the source can't be opened, `main_loop` retries forever without re-opening it. |
+| 5 | live streaming to RTMP (`main.py`, `service`) | `RTMPStream.write()` returns `None`, which the main loop treats as "stop", so streaming ends after one frame. In addition, `SINAR.__call__` passes positional arguments to the keyword-only `main_loop`, and both the root `main.py` and `server.py` call `sinar.new_sinar_process` (and `main.py` also `sinar.any_process_alive` / `stop_all_processes`), which aren't exported from the `sinar` package (they live in `sinar.service`). So neither `main.py` nor `/start-tracker` can stream right now. |
+| 6 | `data annotate` | `-v/--video-path` isn't marked as required, but the command fails without it. |
+| 7 | old `.keras` classifiers | `.keras` files saved with Keras 2.x (TensorFlow ≤ 2.15, e.g. `anbev-cnn-v2.keras`, `sinar_vgg16.keras`) can't be loaded by Keras 3. Files saved with Keras 3 (e.g. `yolov9m-CNN512.keras`) and legacy `.h5` files work. |
 
 ---
 
@@ -429,6 +428,9 @@ out = stream.MultiStream([stream.Viewer("gang-11D"), stream.Saver(vi, output="ou
 
 result = sinar.main_loop("vid/gang-11D.mp4", streamto=out)   # greedy mode returns a MotasResult
 print(result.is_gang, result.confidences)
+
+# live mode (live_stream=True): call sinar.predict_frame(frame) per frame;
+# sinar.last_result holds the MotasResult of the latest 30-sample window
 
 sinar.reset()   # clear tracker and classifier state before the next video
 ```

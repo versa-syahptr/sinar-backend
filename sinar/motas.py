@@ -67,9 +67,11 @@ class Motas():
 
         logger.info("Motion Analysis predicting on demand")
         pred = self.model.predict(x)
-        logger.info(f"preds result: {'GENG MOTOR' if pred else 'aman 👌'}")
+        # ravel: keras returns (1, 1), torch/sklearn return (1,)
+        res = MotasResult.from_probs(np.ravel(pred), threshold=self.threshold)
+        logger.info(f"preds result: {'GENG MOTOR' if res.is_gang else 'aman 👌'} (p={res.confidences:.3f})")
 
-        return MotasResult.from_probs(pred, threshold=self.threshold)
+        return res
 
     def predict_batch(self) -> MotasResult:
         matrices = []

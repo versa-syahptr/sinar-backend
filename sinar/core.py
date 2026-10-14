@@ -47,6 +47,7 @@ class SINAR:
         logger.info(f"yolo model loaded [{yolo_model}]")
         self.motas = Motas(motas_model, live_stream=live_stream, threshold=probability_threshold, device=device)
         self.geng_detected = False
+        self.last_result: Optional[MotasResult] = None
         self.detected_action : Optional[Callable] = None
         self.gang_detected_text = gang_detected_text
         self.benchmark_mode = False
@@ -77,7 +78,8 @@ class SINAR:
 
         # predict on demand if ready and in live stream mode
         if self.live_stream and self.motas.ready():
-            self.geng_detected = self.motas.predict()
+            self.last_result = self.motas.predict()
+            self.geng_detected = self.last_result.is_gang
             if self.geng_detected and self.detected_action is not None: # do only once
                 self.detected_action()
 
@@ -194,6 +196,7 @@ class SINAR:
         self._tracks.clear()
         self.motas.reset()
         self.geng_detected = False
+        self.last_result = None
         self.yolo_model.predictor.trackers[0].reset() # Reset the tracker to make sure it doesn't hold state from previous video
         logger.info("SINAR state reset ✔")
 
