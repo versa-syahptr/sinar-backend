@@ -1,5 +1,5 @@
 from multiprocessing import Event, Process
-from supervision.video.dataclasses import VideoInfo
+from sinar.utils import VideoInfo
 
 from sinar.core import SINAR
 from sinar.stream import RTMPStream

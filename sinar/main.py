@@ -2,7 +2,7 @@ import argparse
 import os
 from pathlib import Path
 
-from supervision.video.dataclasses import VideoInfo
+from sinar.utils import VideoInfo
 
 from sinar.data import annotator, viewer
 from sinar import SINAR

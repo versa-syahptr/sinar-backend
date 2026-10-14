@@ -1,34 +1,91 @@
-[build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "sinar"
 version = "0.1.0"
-description = "A CLI tool for sinar module"
+description = "SINAR: Sistem Inteligen Anti Kejahatan Jalan Raya - motorcycle gang detection from CCTV footage"
+readme = "README.md"
 authors = [
     {name = "Versa Syahputra", email = "versa1220@gmail.com"}
 ]
+# tensorflow has no wheels for Python 3.14 yet
+requires-python = ">=3.12,<3.14"
 dependencies = [
-    "scikit-learn",
-    "tensorflow",
-    "torch",
-    "torchvision",
-    "supervision==0.1.0",
-    "ultralytics",
-    "colorlog"
+    "colorlog>=6.10",
+    "lap>=0.5.12",  # ByteTrack dependency, otherwise ultralytics pip-installs it at runtime
+    "numpy>=2.2",
+    "opencv-python>=4.10",
+    "openvino>=2025.3",
+    "pandas>=2.3",
+    "scikit-learn>=1.7",
+    "tensorflow>=2.20",
+    "torch>=2.9",
+    "torchvision>=0.24",
+    "ultralytics>=8.3.200",
 ]
 
 [project.optional-dependencies]
-service = ["fastapi", "uvicorn", "websocket"]  # List dependencies for the service feature
-annotator = ["labelimg"] # List dependencies for the annotator feature
+service = [
+    "fastapi>=0.115",
+    "geopy>=2.4",
+    "motor>=3.6",
+    "python-multipart>=0.0.20",
+    "uvicorn>=0.30",
+]
+annotator = [
+    "labelimg>=1.8.6",
+    "label-studio-converter>=0.0.58",
+]
 
 [project.scripts]
 sinar = "sinar.main:main"
 
+[dependency-groups]
+# environment for the notebooks in the `lab` branch (sinar-lab worktree)
+lab = [
+    "ipykernel>=6.29",
+    "matplotlib>=3.9",
+    "psutil>=6.0",
+    "pyyaml>=6.0",
+    "torchsummary>=1.5.1",
+    "torchviz>=0.0.3",
+    "tqdm>=4.66",
+]
+# torch build selection, mutually exclusive (see [tool.uv] conflicts)
+cpu = ["torch>=2.9", "torchvision>=0.24"]
+gpu = ["torch>=2.9", "torchvision>=0.24"]
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["sinar", "sinar.*"]
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13"]
+build-backend = "uv_build"
 
+[tool.uv.build-backend]
+module-name = "sinar"
+module-root = ""
 
+[tool.uv]
+# CPU torch by default: inference on Intel hardware goes through OpenVINO instead of CUDA.
+# GPU deployment: uv sync --no-group cpu --group gpu
+default-groups = ["lab", "cpu"]
+conflicts = [
+    [{ group = "cpu" }, { group = "gpu" }],
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", group = "cpu" },
+    { index = "pytorch-cu126", group = "gpu" },
+]
+torchvision = [
+    { index = "pytorch-cpu", group = "cpu" },
+    { index = "pytorch-cu126", group = "gpu" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+# CUDA 12.6 for broad driver compatibility; swap to /whl/cu130 for newer GPUs/drivers
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
