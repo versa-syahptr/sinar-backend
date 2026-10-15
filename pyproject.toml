@@ -49,6 +49,8 @@ lab = [
     "torchviz>=0.0.3",
     "tqdm>=4.66",
 ]
+# step-by-step demo UI (detection -> tracking -> centroid matrix -> classification)
+demo = ["streamlit>=1.66.0"]
 # torch build selection, mutually exclusive (see [tool.uv] conflicts)
 cpu = ["torch>=2.9", "torchvision>=0.24"]
 gpu = ["torch>=2.9", "torchvision>=0.24"]
@@ -64,7 +66,7 @@ module-root = ""
 [tool.uv]
 # CPU torch by default: inference on Intel hardware goes through OpenVINO instead of CUDA.
 # GPU deployment: uv sync --no-group cpu --group gpu
-default-groups = ["lab", "cpu"]
+default-groups = ["lab", "demo", "cpu"]
 conflicts = [
     [{ group = "cpu" }, { group = "gpu" }],
 ]
