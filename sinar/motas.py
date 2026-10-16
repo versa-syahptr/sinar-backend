@@ -111,7 +111,9 @@ class Motas():
 
     
     def put_result(self, result: Results):
-        if (self.idx_frame == 0 or self.idx_frame%self.sampling == 0) and len(self.centroids) < self.size:
+        # live: keep every `sampling`-th frame until one window is full
+        # greedy: keep every frame, predict_batch does the sampling for each window start
+        if not self.live_stream or ((self.idx_frame == 0 or self.idx_frame%self.sampling == 0) and len(self.centroids) < self.size):
             if result.boxes.id is None:
                 self.centroids.append(dict()) # put empty row
             else:
