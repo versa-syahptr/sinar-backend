@@ -24,6 +24,7 @@ STEP_ICONS = [":material/center_focus_strong:", ":material/route:", ":material/g
 THUMB_STRIDE = 15  # greedy makes a window per start frame; thumbnails show every 15th
 
 st.set_page_config(page_title="SINAR demo", page_icon=":material/two_wheeler:", layout="wide")
+st.logo(str(Path(__file__).parent / "logo.svg"))
 
 
 # ---------- cached resources ----------
@@ -128,6 +129,17 @@ with st.sidebar:
     with st.container(horizontal=True):
         st.button("Prev", icon=":material/chevron_left:", on_click=go_step, args=(-1,), width="stretch")
         st.button("Next", icon=":material/chevron_right:", on_click=go_step, args=(1,), width="stretch")
+
+    st.divider()
+    st.markdown("**· SINAR ·**", text_alignment="center")
+    st.caption("**_Sistem Inteligen Anti Kejahatan Jalan Raya_**", text_alignment="center")
+    st.caption(
+        ":material/description: Implementation of the paper  \n"
+        "> *Detecting Motorcycle Crime Gangs in CCTV Video Footage Using YOLOv9 and CNN*  \n\n"
+        "ICICyTA 2024 · [doi:10.1109/ICICYTA64807.2024.10913459]"
+        "(https://doi.org/10.1109/ICICYTA64807.2024.10913459)"
+    )
+    st.link_button("GitHub", url="https://github.com/versa-syahptr/sinar-backend", icon=":material/code:", width="stretch")
 
 step = st.segmented_control("Step", STEPS, key="step", required=True, label_visibility="collapsed",
                             format_func=lambda s: f"{STEP_ICONS[STEPS.index(s)]} {s}", width="stretch")
