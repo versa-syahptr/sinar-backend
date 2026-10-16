@@ -1,0 +1,23 @@
+# SINAR demo viewer behind Nginx Proxy Manager (sinar.versa.my.id).
+#   docker compose up -d --build
+# NPM proxy host: forward to http://sinar-demo:8501 with "Websockets Support" on.
+services:
+  sinar-demo:
+    build: .
+    image: sinar-demo
+    container_name: sinar-demo
+    restart: unless-stopped
+    volumes:
+      # folder with the clips, *.demo.pkl and rendered *.detect.mp4 / *.track.mp4
+      - ${SINAR_DEMO_VID_DIR:-../vid}:/data/vid:ro
+    networks:
+      - proxy
+    # no published port: only NPM reaches it. For a quick test without NPM:
+    # ports:
+    #   - "8501:8501"
+
+networks:
+  proxy:
+    # the shared network NPM and the other services are on
+    external: true
+    name: ${NPM_NETWORK:-proxy}

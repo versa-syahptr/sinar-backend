@@ -1,0 +1,6 @@
+# hosted viewer only (Dockerfile); pinned to the versions that write the recordings,
+# so the pickled numpy/pandas data loads the same way
+streamlit==1.66.0
+altair==6.3.0
+pandas==3.0.6
+numpy==2.5.4

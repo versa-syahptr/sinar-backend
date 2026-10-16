@@ -1,0 +1,5 @@
+# the image only needs the viewer
+*
+!app.py
+!records.py
+!requirements.txt
