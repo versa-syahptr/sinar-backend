@@ -11,7 +11,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY app.py records.py ./
+COPY app.py records.py logo.svg ./
 
 # clips + *.demo.pkl + *.detect.mp4 / *.track.mp4, mounted by compose
 ENV SINAR_DEMO_VID_DIR=/data/vid \
