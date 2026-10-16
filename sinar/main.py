@@ -1,5 +1,8 @@
 import argparse
+import importlib.util
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 from sinar.utils import VideoInfo
@@ -64,6 +67,26 @@ def handle_service(args):
         log_level="info"
     )
 
+def handle_demo(args):
+    """
+    Start the step-by-step Streamlit demo (demo/app.py), from any working directory
+    """
+    # demo/ lives next to the package in the source tree and isn't shipped
+    backend = Path(__file__).resolve().parent.parent
+    app = backend / "demo" / "app.py"
+    if not app.exists():
+        sys.exit(f"demo app not found at {app}; `sinar demo` needs the source checkout (uv sync)")
+    if importlib.util.find_spec("streamlit") is None:
+        sys.exit("streamlit is not installed: uv sync --group demo")
+
+    # run from the backend dir so .streamlit/config.toml applies
+    cmd = [sys.executable, "-m", "streamlit", "run", str(app), "--server.port", str(args.port), *args.streamlit_args]
+    try:
+        sys.exit(subprocess.run(cmd, cwd=backend).returncode)
+    except KeyboardInterrupt:
+        pass
+
+
 def main():
     parser = argparse.ArgumentParser(prog='sinar', description=DESCRIPTION)
     parser.add_argument(
@@ -118,8 +141,19 @@ def main():
     parser_service.add_argument('--port', type=int, default=8080, help='Port to run the service on')
     parser_service.set_defaults(func=handle_service)
 
+    # Demo subcommand
+    parser_demo = subparsers.add_parser('demo', help='Start the step-by-step Streamlit demo',
+                                        epilog='Other options are passed to `streamlit run`, e.g. --server.headless true')
+    parser_demo.add_argument('--port', type=int, default=8501, help='Port to serve the demo on (default: 8501)')
+    # anything else on the command line goes to `streamlit run`, e.g. --server.headless true
+    parser_demo.set_defaults(func=handle_demo)
+
     # Parse arguments and call the appropriate function
-    args = parser.parse_args()
+    args, extra = parser.parse_known_args()
+    if args.command == 'demo':
+        args.streamlit_args = extra
+    elif extra:
+        parser.error(f"unrecognized arguments: {' '.join(extra)}")
 
     set_level(args.log_level)
 

@@ -23,6 +23,7 @@ At Proceeding of The 4th International Conference on Intelligent Cybernetics Tec
   - [`sinar predict`](#sinar-predict)
   - [`sinar data annotate`](#sinar-data-annotate)
   - [`sinar data view`](#sinar-data-view)
+  - [`sinar demo`](#sinar-demo)
   - [`sinar service`](#sinar-service)
   - [Not yet implemented](#not-yet-implemented)
 - [Known Issues](#known-issues)
@@ -60,7 +61,7 @@ video frame ──► YOLO detector + ByteTrack ──► centroid of every trac
 | Linux (x86_64) | tested platform |
 | [uv](https://docs.astral.sh/uv/getting-started/installation/) | environment and dependency management |
 | Python 3.12 or 3.13 | installed automatically by uv (TensorFlow has no Python 3.14 support yet) |
-| `ffmpeg` on `PATH` | `sinar data annotate`, RTMP streaming in `sinar service` |
+| `ffmpeg` on `PATH` | `sinar data annotate`, `sinar demo` videos, RTMP streaming in `sinar service` |
 | nginx with the RTMP module | `sinar service` live CCTV streaming (see `nginx-rtmp.conf`) |
 | Intel CPU/iGPU (optional) | fast inference through OpenVINO |
 | NVIDIA GPU (optional) | CUDA inference, see [GPU environment](#gpu-environment) |
@@ -222,6 +223,7 @@ sinar [-L LEVEL] <command> [options]
 | `predict` | run gang detection on a video file or stream |
 | `data annotate` | extract frames from a video and auto-annotate them with YOLO |
 | `data view` | browse a YOLO dataset with its bounding boxes |
+| `demo` | start the step-by-step Streamlit demo |
 | `service` | run the REST API service |
 | `data centrogen`, `train` | placeholders, not implemented yet |
 
@@ -355,6 +357,28 @@ $ sinar data view ~/dataset/geng-4
 ```
 
 ---
+
+### `sinar demo`
+
+Start the step-by-step demo (detection → tracking → centroid matrix → classification) in the browser. It works from any working directory and needs the source checkout and the `demo` dependency group (installed by default with `uv sync`).
+
+```
+sinar demo [--port PORT] [streamlit options...]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--port PORT` | `8501` | Port to serve the demo on. |
+| other options | | Passed to `streamlit run`, e.g. `--server.headless true`. |
+
+The demo plays recordings, it doesn't run the models live. Record the clips in `vid/` before presenting. This runs SINAR in greedy mode and renders the annotated videos for steps 1–2:
+
+```bash
+uv run python demo/pipeline.py vid/*.mp4
+uv run python demo/pipeline.py --render-only vid/*.mp4   # only redraw the videos
+```
+
+A clip without a recording can also be processed from the app's sidebar.
 
 ### `sinar service`
 
