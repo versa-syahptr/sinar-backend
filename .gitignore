@@ -16,3 +16,6 @@ dist
 *.egg-info
 plots
 .ipynb_checkpoints
+
+# demo app recordings (demo/pipeline.py); rendered videos are covered by *mp4
+*.demo.pkl

@@ -1,0 +1,6 @@
+[server]
+# the watcher walks torch modules (error spam) and reloads the models on every save
+fileWatcherType = "none"
+
+[client]
+toolbarMode = "minimal"
